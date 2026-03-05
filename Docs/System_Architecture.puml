@@ -1,0 +1,23 @@
+@startuml
+participant "Zigbee Sensor\n(End Device)" as Sensor
+participant "Gateway\n(Zigbee Radio & Parser)" as GW_Z
+participant "Gateway\n(Modbus Register Map)" as GW_M
+participant "PLC / SCADA\n(Modbus Master)" as PLC
+
+note over Sensor: Deep Sleep State
+
+== Zigbee Push Cycle ==
+Sensor -> Sensor: Wake Up
+Sensor -> Sensor: Read Sensor
+Sensor -> GW_Z: Transmit Payload
+note over Sensor: Return to \n Deep Sleep
+
+GW_Z -> GW_Z: Decrypt & Parse
+GW_Z -> GW_M: Update Register
+
+== Modbus Poll Cycle ==
+loop Cyclic Polling
+    PLC -> GW_M: Read Data Request
+    GW_M -> PLC: Sensor Data Response
+end
+@enduml

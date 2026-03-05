@@ -1,0 +1,34 @@
+@startuml
+skinparam componentStyle uml2
+
+package "Field Level" {
+  node "Zigbee Sensor Node" {
+    [Battery] -right-> [MCU]
+    [Sensor] -down-> [MCU]
+    [MCU] -right-> [Zigbee Radio Tx]
+  }
+}
+
+node "Industrial Edge Gateway" {
+  [Zigbee Coordinator\n(Radio Rx)] as ZBRx
+  [Message Queue] as MQ
+  [Payload Parser] as Parser
+  [Shared Memory\n(Register Map)] as RegMap
+  [Modbus Server\n(Slave Interface)] as MBServer
+  
+  ZBRx -right-> MQ : Raw Packets
+  MQ -right-> Parser : Process
+  Parser -down-> RegMap : Update Register
+  RegMap <-right- MBServer : Fetch Data
+}
+
+package "OT Network" {
+  node "PLC / SCADA" {
+    [Modbus Client\n(Master Interface)] as MBClient
+  }
+}
+
+[Zigbee Radio Tx] ..> ZBRx : Zigbee Wireless\n(Asynchronous Push)
+MBClient <--> MBServer : Ethernet/RS485\n(Synchronous Poll)
+
+@enduml

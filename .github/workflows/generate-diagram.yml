@@ -1,0 +1,36 @@
+name: PlantUML CI
+
+on:
+  push:
+    paths:
+      - 'Docs/*.puml' # Am restrâns trigger-ul doar la folderul Docs
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Generăm SVG-urile și le punem în subfolderul Diagram_out
+      - name: Generate PlantUML (SVG)
+        uses: docker://plantuml/plantuml
+        with:
+          args: -tsvg -o "Diagram_out" "Docs/*.puml"
+
+      # Salvăm artefactele din noul folder (DOAR LOCAL)
+      - name: Upload Generated Diagrams
+        if: ${{ env.ACT }}
+        uses: actions/upload-artifact@v4
+        with:
+            name: diagrams
+            path: "Docs/Diagram_out/*.svg"
+
+      # Facem commit cu fișierele din noul folder (DOAR PE GITHUB)
+      - name: Commit and Push
+        if: ${{ !env.ACT }}
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: auto-generate PlantUML SVG diagrams"

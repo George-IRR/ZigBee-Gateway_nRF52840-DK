@@ -1,0 +1,12 @@
+name: Project CI
+on: [push]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run Dummy Test
+        run: |
+          echo "Testing Zigbee Parser..."
+          exit 0

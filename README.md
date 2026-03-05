@@ -13,11 +13,11 @@ The system acts as a bridge between a wireless Zigbee sensor network and a contr
 
 ### 2.1 Data Flow
 
-
+![Data Flow Diagram](Docs/Diagram_out/Data_Seq.svg)
 
 ### 2.2 System Topology
 
-
+![System Topology Diagram](Docs/Diagram_out/System_Architecture.svg)
 
 ## 3. Development Steps
 

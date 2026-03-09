@@ -3,32 +3,34 @@ skinparam componentStyle uml2
 
 package "Field Level" {
   node "Zigbee Sensor Node" {
-    [Battery] -right-> [MCU]
+    [Hardware WDT] -right-> [MCU]
+    [Battery] -down-> [MCU]
     [Sensor] -down-> [MCU]
-    [MCU] -right-> [Zigbee Radio Tx]
+    [MCU] <--> [Zigbee Radio]
   }
 }
 
 node "Industrial Edge Gateway" {
-  [Zigbee Coordinator\n(Radio Rx)] as ZBRx
+  [Zigbee Coordinator] as ZBRx
   [Message Queue] as MQ
   [Payload Parser] as Parser
-  [Shared Memory\n(Register Map)] as RegMap
-  [Modbus Server\n(Slave Interface)] as MBServer
+  [Stale Data Watchdog] as Timeout
+  [Shared Memory] as RegMap
+  [Modbus Server] as MBServer
   
   ZBRx -right-> MQ : Raw Packets
   MQ -right-> Parser : Process
   Parser -down-> RegMap : Update Register
+  Timeout -up-> RegMap : Invalidate (0xFFFF)
   RegMap <-right- MBServer : Fetch Data
 }
 
 package "OT Network" {
   node "PLC / SCADA" {
-    [Modbus Client\n(Master Interface)] as MBClient
+    [Modbus Client] as MBClient
   }
 }
 
-[Zigbee Radio Tx] ..> ZBRx : Zigbee Wireless\n(Asynchronous Push)
-MBClient <--> MBServer : Ethernet/RS485\n(Synchronous Poll)
-
+[Zigbee Radio] <..> ZBRx : Zigbee Wireless\n(AES-128)
+MBClient <--> MBServer : Ethernet/RS485
 @enduml

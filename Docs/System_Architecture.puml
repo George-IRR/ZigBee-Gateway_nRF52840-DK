@@ -1,23 +1,34 @@
 @startuml
-participant "Zigbee Sensor\n(End Device)" as Sensor
-participant "Gateway\n(Zigbee Radio & Parser)" as GW_Z
-participant "Gateway\n(Modbus Register Map)" as GW_M
-participant "PLC / SCADA\n(Modbus Master)" as PLC
+participant "Zigbee Sensor" as Sensor
+participant "Gateway Parser" as GW_Z
+participant "Shared Memory" as GW_M
+participant "PLC / SCADA" as PLC
 
-note over Sensor: Deep Sleep State
+note over Sensor: Deep Sleep
 
 == Zigbee Push Cycle ==
-Sensor -> Sensor: Wake Up
+Sensor -> Sensor: Wake Up (WDT Active)
 Sensor -> Sensor: Read Sensor
-Sensor -> GW_Z: Transmit Payload
-note over Sensor: Return to \n Deep Sleep
+Sensor -> Sensor: Random Delay (Jitter)
+Sensor -> GW_Z: Transmit Payload (AES-128)
 
-GW_Z -> GW_Z: Decrypt & Parse
-GW_Z -> GW_M: Update Register
+alt ACK received
+    GW_Z --> Sensor: Application ACK
+    note over Sensor: Sleep
+    GW_Z -> GW_Z: Decrypt & Parse
+    GW_Z -> GW_M: Update Register
+else Network lost / No ACK
+    Sensor -> Sensor: Rejoin (Exponential Backoff)
+    note over Sensor: Sleep
+end
 
 == Modbus Poll Cycle ==
 loop Cyclic Polling
     PLC -> GW_M: Read Data Request
-    GW_M -> PLC: Sensor Data Response
+    alt Data is Fresh
+        GW_M -> PLC: Sensor Data
+    else Sensor Timeout
+        GW_M -> PLC: Error Code (0xFFFF)
+    end
 end
 @enduml

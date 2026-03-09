@@ -3,7 +3,7 @@ name: PlantUML CI
 on:
   push:
     paths:
-      - 'Docs/*.puml' # Am restrâns trigger-ul doar la folderul Docs
+      - 'Docs/*.puml' # Only trigger in Docs
 
 jobs:
   generate:
@@ -14,13 +14,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Generăm SVG-urile și le punem în subfolderul Diagram_out
+      # Generate SVGs into Diagram_out subdirectory
       - name: Generate PlantUML (SVG)
         uses: docker://plantuml/plantuml
         with:
           args: -tsvg -o "Diagram_out" "Docs/*.puml"
 
-      # Salvăm artefactele din noul folder (DOAR LOCAL)
+      # Save artifacts (local execution only)
       - name: Upload Generated Diagrams
         if: ${{ env.ACT }}
         uses: actions/upload-artifact@v4
@@ -28,7 +28,7 @@ jobs:
             name: diagrams
             path: "Docs/Diagram_out/*.svg"
 
-      # Facem commit cu fișierele din noul folder (DOAR PE GITHUB)
+      # Commit changes (GitHub execution only)
       - name: Commit and Push
         if: ${{ !env.ACT }}
         uses: stefanzweifel/git-auto-commit-action@v5

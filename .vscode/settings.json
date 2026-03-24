@@ -1,0 +1,6 @@
+{
+    "nrf-connect.applications": [
+        "${workspaceFolder}\\end_device_nrf"
+    ],
+    "cmake.sourceDirectory": "C:/Users/George/Prog/ZigBee-Gateway/end_device_nrf"
+}

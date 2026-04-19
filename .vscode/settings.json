@@ -1,6 +1,10 @@
 {
     "nrf-connect.applications": [
-        "${workspaceFolder}\\end_device_nrf"
+        "${workspaceFolder}\\end_device_nrf",
+        "${workspaceFolder}\\zigbee_end_device\\light_switch",
+        "${workspaceFolder}\\zigbee_end_device\\light_bulb",
+        "${workspaceFolder}\\zigbee_network\\shell",
+        "${workspaceFolder}\\zigbee_network\\network_coordinator"
     ],
     "cmake.sourceDirectory": "C:/Users/George/Prog/ZigBee-Gateway/end_device_nrf"
 }

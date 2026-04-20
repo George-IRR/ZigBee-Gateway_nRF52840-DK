@@ -18,13 +18,25 @@ int main(void)
     if (i2c_write(i2c_dev, &data, 0, address) == 0) {
         printk("Device found at : 0x%02X\n", address);
     }
-
-    data = 0xD0;
+    
     uint8_t read_data;
+    uint8_t reg_addr = 0xF4;
+    uint8_t command = 0x2E;
+    uint8_t buffer[2] = {reg_addr, command};
+    i2c_write(i2c_dev, buffer, 2, 0x77);
+
+    k_msleep(5);
+
+    data = 0xF8;
     i2c_write_read(i2c_dev, address, &data, sizeof(data), &read_data, sizeof(read_data));
+    printk("Response: 0x%02X\n", read_data);
 
-    //k_msleep(1000);
+    data = 0xF7;
+    i2c_write_read(i2c_dev, address, &data, sizeof(data), &read_data, sizeof(read_data));
+    printk("Response: 0x%02X\n", read_data);
 
+    data = 0xF6;
+    i2c_write_read(i2c_dev, address, &data, sizeof(data), &read_data, sizeof(read_data));
     printk("Response: 0x%02X\n", read_data);
     
     return 0;

@@ -1,1 +1,9 @@
 /local_artifacts
+
+# editors
+*.swp
+*~
+
+# build
+end_device_nrf/build*/
+*.exe

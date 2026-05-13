@@ -1,0 +1,12 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "nrf-connect",
+			"request": "launch",
+			"name": "Launch bmp180/build/bmp180",
+			"config": "${workspaceFolder}/zigbee_end_device/bmp180/build/bmp180",
+			"runToEntryPoint": "main"
+		}
+	]
+}

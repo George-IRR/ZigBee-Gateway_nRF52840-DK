@@ -1,0 +1,9 @@
+&i2c0 {
+    status = "okay";
+    
+    bmp180: bmp180@77 {
+        compatible = "bosch,bmp180";
+        reg = <0x77>;
+        osr-press = <3>;
+    };
+};

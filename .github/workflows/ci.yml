@@ -1,12 +1,26 @@
-name: Project CI
-on: [push]
+name: Embedded CI Pipeline
+
+on: [push, pull_request]
 
 jobs:
-  build-and-test:
+  run-tests:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Run Dummy Test
+      - name: Checkout code
+        uses: actions/checkout@v4 
+
+      - name: Install GCC
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Compile Tests
         run: |
-          echo "Testing Zigbee Parser..."
-          exit 0
+          gcc -I./shared_components/include \
+              -I./shared_components/unity \
+              ./shared_components/src/payload_parser.c \
+              ./shared_components/unity/unity.c \
+              ./shared_components/tests/test_payload_parser.c \
+              -o test_run
+
+      - name: Run Unit Tests
+        run: ./test_run 

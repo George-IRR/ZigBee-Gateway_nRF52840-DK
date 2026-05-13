@@ -8,6 +8,4 @@ project(bmp180)
 
 target_sources(app PRIVATE
     src/main.c
-    src/driver_bmp180.c
-    src/driver_bmp180_basic.c
 )

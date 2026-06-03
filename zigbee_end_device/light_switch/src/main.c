@@ -230,6 +230,17 @@ static void start_identifying(zb_bufid_t bufid)
 	}
 }
 
+static void write_attr_callback(zb_bufid_t bufid)
+{
+	zb_zcl_command_send_status_t *send_status = ZB_BUF_GET_PARAM(bufid, zb_zcl_command_send_status_t);
+	if (send_status->status == RET_OK) {
+		LOG_INF("Write attribute request sent successfully!");
+	} else {
+		LOG_ERR("Write attribute request failed to send: %d", send_status->status);
+	}
+	zb_buf_free(bufid);
+}
+
 static void send_random_string_cb(zb_bufid_t bufid)
 {
 	char rand_str[17];
@@ -251,7 +262,7 @@ static void send_random_string_cb(zb_bufid_t bufid)
 
 	ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
 		ptr,
-		0xf000,
+		ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID,
 		ZB_ZCL_ATTR_TYPE_CHAR_STRING,
 		zcl_str);
 
@@ -265,7 +276,7 @@ static void send_random_string_cb(zb_bufid_t bufid)
 		LIGHT_SWITCH_ENDPOINT,
 		ZB_AF_HA_PROFILE_ID,
 		ZB_ZCL_CLUSTER_ID_BASIC,
-		NULL);
+		write_attr_callback);
 }
 
 /**@brief Callback for button events.

@@ -14,6 +14,7 @@
 #include <dk_buttons_and_leds.h>
 
 #include <zboss_api.h>
+#include <zboss_api_addons.h>
 #include <zb_mem_config_max.h>
 #include <zigbee/zigbee_error_handler.h>
 #include <zigbee/zigbee_app_utils.h>
@@ -60,7 +61,7 @@ LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
  * Stores all settings and static values.
  */
 struct zb_device_ctx {
-	zb_zcl_basic_attrs_t basic_attr;
+	zb_zcl_basic_attrs_ext_t basic_attr;
 	zb_zcl_identify_attrs_t identify_attr;
 };
 
@@ -77,39 +78,19 @@ ZB_ZCL_DECLARE_IDENTIFY_ATTRIB_LIST(
 	identify_attr_list,
 	&dev_ctx.identify_attr.identify_time);
 
-/* Buffer to store the received string payload (1 byte length + 32 bytes data) */
-static zb_uint8_t custom_string_payload[33];
-
-static zb_zcl_attr_t basic_attr_list[] = {
-	{
-		ZB_ZCL_ATTR_BASIC_ZCL_VERSION_ID,
-		ZB_ZCL_ATTR_TYPE_U8,
-		ZB_ZCL_ATTR_ACCESS_READ_ONLY,
-		0, /* manuf_code */
-		(void *)(&dev_ctx.basic_attr.zcl_version)
-	},
-	{
-		ZB_ZCL_ATTR_BASIC_POWER_SOURCE_ID,
-		ZB_ZCL_ATTR_TYPE_U8,
-		ZB_ZCL_ATTR_ACCESS_READ_ONLY,
-		0, /* manuf_code */
-		(void *)(&dev_ctx.basic_attr.power_source)
-	},
-	{
-		0xf000,
-		ZB_ZCL_ATTR_TYPE_CHAR_STRING,
-		ZB_ZCL_ATTR_ACCESS_READ_WRITE,
-		0, /* manuf_code */
-		(void *)(custom_string_payload)
-	},
-	{
-		ZB_ZCL_NULL_ID,
-		0,
-		0,
-		0,
-		NULL
-	}
-};
+ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST_EXT(
+	basic_attr_list,
+	&dev_ctx.basic_attr.zcl_version,
+	&dev_ctx.basic_attr.app_version,
+	&dev_ctx.basic_attr.stack_version,
+	&dev_ctx.basic_attr.hw_version,
+	dev_ctx.basic_attr.mf_name,
+	dev_ctx.basic_attr.model_id,
+	dev_ctx.basic_attr.date_code,
+	&dev_ctx.basic_attr.power_source,
+	dev_ctx.basic_attr.location_id,
+	&dev_ctx.basic_attr.ph_env,
+	dev_ctx.basic_attr.sw_ver);
 
 /* Construct a custom cluster array explicitly declaring Basic, Identify, and On/Off Server support */
 static zb_zcl_cluster_desc_t nwk_coordinator_clusters[] = {
@@ -177,7 +158,35 @@ static void app_clusters_attr_init(void)
 {
 	/* Basic cluster attributes data. */
 	dev_ctx.basic_attr.zcl_version = ZB_ZCL_VERSION;
+	dev_ctx.basic_attr.app_version = 0;
+	dev_ctx.basic_attr.stack_version = 0;
+	dev_ctx.basic_attr.hw_version = 0;
 	dev_ctx.basic_attr.power_source = COORDINATOR_INIT_BASIC_POWER_SOURCE;
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.mf_name,
+		"Nordic",
+		ZB_ZCL_STRING_CONST_SIZE("Nordic"));
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.model_id,
+		"Coordinator",
+		ZB_ZCL_STRING_CONST_SIZE("Coordinator"));
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.date_code,
+		"20200329",
+		ZB_ZCL_STRING_CONST_SIZE("20200329"));
+
+	/* Initialize location_id as empty Pascal string */
+	dev_ctx.basic_attr.location_id[0] = 0;
+
+	dev_ctx.basic_attr.ph_env = 0;
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.sw_ver,
+		"",
+		0);
 
 	/* Identify cluster attributes data. */
 	dev_ctx.identify_attr.identify_time = ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE;
@@ -339,19 +348,20 @@ static void zcl_device_cb(zb_bufid_t bufid)
 				LOG_INF("Command parsed: Turn OFF");
 			}
 		} else if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_BASIC &&
-			   cb_param->attr_id == 0xf000) {
-			
-			zb_uint8_t *zcl_str = cb_param->values.data_variable.p_data;
+		           cb_param->attr_id == ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID) {
+
+			/* Read from the attribute storage (Pascal string: [len][data...]) */
+			zb_uint8_t *zcl_str = (zb_uint8_t *)dev_ctx.basic_attr.location_id;
 			zb_uint8_t len = zcl_str[0];
-			if (len > 32) {
-				len = 32;
+			if (len > 16) {
+				len = 16;
 			}
-			
-			static char print_buf[33];
+
+			static char print_buf[17];
 			memcpy(print_buf, &zcl_str[1], len);
 			print_buf[len] = '\0';
-			
-			LOG_INF("Received custom random string payload: %s (length: %d)", print_buf, len);
+
+			LOG_INF("zcl_device_cb - Received random string: %s (length: %d)", print_buf, len);
 		}
 	}
 	device_cb_param->status = RET_OK;
@@ -468,6 +478,24 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 }
 
+static void modify_attr_value_callback(zb_uint8_t ep, zb_uint16_t cluster_id, zb_uint16_t attr_id, zb_uint8_t *value)
+{
+	if (cluster_id == ZB_ZCL_CLUSTER_ID_BASIC &&
+	    attr_id == ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID) {
+		
+		zb_uint8_t len = value[0];
+		if (len > 32) {
+			len = 32;
+		}
+		
+		static char print_buf[33];
+		memcpy(print_buf, &value[1], len);
+		print_buf[len] = '\0';
+		
+		LOG_INF("Received custom random string payload: %s (length: %d)", print_buf, len);
+	}
+}
+
 int main(void)
 {
 	int blink_status = 0;
@@ -488,6 +516,9 @@ int main(void)
 
 	/* Add this line to handle incoming validated ZCL commands */
 	ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
+
+	/* Set modify attribute callback to capture Write Attribute commands */
+	ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB(modify_attr_value_callback);
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

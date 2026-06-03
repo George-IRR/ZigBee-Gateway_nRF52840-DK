@@ -11,6 +11,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
 #include <dk_buttons_and_leds.h>
 #include <ram_pwrdn.h>
 
@@ -229,6 +230,44 @@ static void start_identifying(zb_bufid_t bufid)
 	}
 }
 
+static void send_random_string_cb(zb_bufid_t bufid)
+{
+	char rand_str[17];
+	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	for (size_t i = 0; i < 16; i++) {
+		uint32_t val = sys_rand32_get();
+		rand_str[i] = charset[val % (sizeof(charset) - 1)];
+	}
+	rand_str[16] = '\0';
+
+	LOG_INF("Generated random string to send: %s", rand_str);
+
+	zb_uint8_t *ptr;
+	ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+
+	static zb_uint8_t zcl_str[18];
+	zcl_str[0] = 16;
+	memcpy(&zcl_str[1], rand_str, 16);
+
+	ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
+		ptr,
+		0xf000,
+		ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+		zcl_str);
+
+	zb_uint16_t coord_addr = 0x0000;
+	ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
+		bufid,
+		ptr,
+		coord_addr, /* Pass variable since the macro takes its address */
+		ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
+		10, /* ZIGBEE_COORDINATOR_ENDPOINT */
+		LIGHT_SWITCH_ENDPOINT,
+		ZB_AF_HA_PROFILE_ID,
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		NULL);
+}
+
 /**@brief Callback for button events.
  *
  * @param[in]   button_state  Bitmask containing buttons state.
@@ -302,6 +341,12 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 			zb_err_code = zb_buf_get_out_delayed_ext(
 				light_switch_send_on_off, cmd_id, 0);
 			ZB_ERROR_CHECK(zb_err_code);
+
+			/* Queue custom random string transmission */
+			zb_ret_t rand_err = zb_buf_get_out_delayed(send_random_string_cb);
+			if (rand_err != RET_OK) {
+				LOG_ERR("Failed to queue random string transmission (err %d)", rand_err);
+			}
 		}
 		break;
 	default:

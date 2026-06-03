@@ -77,10 +77,39 @@ ZB_ZCL_DECLARE_IDENTIFY_ATTRIB_LIST(
 	identify_attr_list,
 	&dev_ctx.identify_attr.identify_time);
 
-ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST(
-	basic_attr_list,
-	&dev_ctx.basic_attr.zcl_version,
-	&dev_ctx.basic_attr.power_source);
+/* Buffer to store the received string payload (1 byte length + 32 bytes data) */
+static zb_uint8_t custom_string_payload[33];
+
+static zb_zcl_attr_t basic_attr_list[] = {
+	{
+		ZB_ZCL_ATTR_BASIC_ZCL_VERSION_ID,
+		ZB_ZCL_ATTR_TYPE_U8,
+		ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+		0, /* manuf_code */
+		(void *)(&dev_ctx.basic_attr.zcl_version)
+	},
+	{
+		ZB_ZCL_ATTR_BASIC_POWER_SOURCE_ID,
+		ZB_ZCL_ATTR_TYPE_U8,
+		ZB_ZCL_ATTR_ACCESS_READ_ONLY,
+		0, /* manuf_code */
+		(void *)(&dev_ctx.basic_attr.power_source)
+	},
+	{
+		0xf000,
+		ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+		ZB_ZCL_ATTR_ACCESS_READ_WRITE,
+		0, /* manuf_code */
+		(void *)(custom_string_payload)
+	},
+	{
+		ZB_ZCL_NULL_ID,
+		0,
+		0,
+		0,
+		NULL
+	}
+};
 
 /* Construct a custom cluster array explicitly declaring Basic, Identify, and On/Off Server support */
 static zb_zcl_cluster_desc_t nwk_coordinator_clusters[] = {
@@ -309,6 +338,20 @@ static void zcl_device_cb(zb_bufid_t bufid)
 			} else {
 				LOG_INF("Command parsed: Turn OFF");
 			}
+		} else if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_BASIC &&
+			   cb_param->attr_id == 0xf000) {
+			
+			zb_uint8_t *zcl_str = cb_param->values.data_variable.p_data;
+			zb_uint8_t len = zcl_str[0];
+			if (len > 32) {
+				len = 32;
+			}
+			
+			static char print_buf[33];
+			memcpy(print_buf, &zcl_str[1], len);
+			print_buf[len] = '\0';
+			
+			LOG_INF("Received custom random string payload: %s (length: %d)", print_buf, len);
 		}
 	}
 	device_cb_param->status = RET_OK;

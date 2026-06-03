@@ -633,12 +633,16 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		if (status == RET_OK) {
-			/* Check the light device address. */
+			/* Comment out or delete this block to keep static addressing intact */
+			/*
 			if (bulb_ctx.short_addr == 0xFFFF) {
 				k_timer_start(&bulb_ctx.find_alarm,
 					      MATCH_DESC_REQ_START_DELAY,
 					      MATCH_DESC_REQ_TIMEOUT);
 			}
+			*/
+			LOG_INF("Static addressing to coordinator initialized.");
+			dk_set_led_on(BULB_FOUND_LED);
 		}
 		break;
 	case ZB_ZDO_SIGNAL_LEAVE:
@@ -822,13 +826,18 @@ int main(void)
 	zb_set_ed_timeout(ED_AGING_TIMEOUT_64MIN);
 	zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(3000));
 
-	/* Set default bulb short_addr. */
-	bulb_ctx.short_addr = 0xFFFF;
+	/* Set default bulb short_addr directly to the Coordinator */
+	bulb_ctx.short_addr = 0x0000;
+	bulb_ctx.endpoint = 10; /* Must match ZIGBEE_COORDINATOR_ENDPOINT of coordinator */
+
+	/* Disable the match descriptor discovery timer to avoid overwriting addresses */
+	// k_timer_start(&bulb_ctx.find_alarm, MATCH_DESC_REQ_START_DELAY, MATCH_DESC_REQ_TIMEOUT);
 
 	/* If "sleepy button" is defined, check its state during Zigbee
 	 * initialization and enable sleepy behavior at device if defined button
 	 * is pressed.
 	 */
+	
 #if defined BUTTON_SLEEPY
 	if (dk_get_buttons() & BUTTON_SLEEPY) {
 		zigbee_configure_sleepy_behavior(true);

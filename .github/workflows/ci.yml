@@ -70,12 +70,12 @@ jobs:
       - name: Build Firmware (Sysbuild)
         if: ${{ matrix.sysbuild == true }}
         run: |
-          nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build --sysbuild
+          nrfutil toolchain-manager launch --ncs-version v2.9.0 -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build --sysbuild
 
       - name: Build Firmware (Standard)
         if: ${{ matrix.sysbuild == false }}
         run: |
-          nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build
+          nrfutil toolchain-manager launch --ncs-version v2.9.0 -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4

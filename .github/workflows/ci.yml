@@ -59,6 +59,11 @@ jobs:
         with:
           path: project # Checkout project in a subdirectory to avoid conflicting with the container's SDK files
 
+      - name: Add local bin to PATH
+        run: |
+          echo "/root/.local/bin" >> $GITHUB_PATH
+
+
       - name: Initialize CCache
         uses: actions/cache@v4
         with:

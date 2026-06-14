@@ -23,6 +23,12 @@
 #include "zb_mem_config_custom.h"
 #include "zb_dimmer_switch.h"
 
+/* FOR BMP180 */
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/sys/printk.h>
+
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 #include <osif/mac_platform.h>
 #endif
@@ -66,7 +72,7 @@
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
  * for all network devices before running other samples.
  */
-#define ERASE_PERSISTENT_CONFIG    ZB_FALSE
+#define ERASE_PERSISTENT_CONFIG    ZB_TRUE
 /* LED indicating that light switch successfully joind Zigbee network. */
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
 /* LED used for device identification. */
@@ -156,22 +162,103 @@ ZB_ZCL_DECLARE_ON_OFF_CLIENT_ATTRIB_LIST(
 ZB_ZCL_DECLARE_LEVEL_CONTROL_CLIENT_ATTRIB_LIST(
 	level_control_client_attr_list);
 
-/* Declare cluster list for Dimmer Switch device. */
-ZB_DECLARE_DIMMER_SWITCH_CLUSTER_LIST(
-	dimmer_switch_clusters,
-	basic_server_attr_list,
-	identify_client_attr_list,
-	identify_server_attr_list,
-	scenes_client_attr_list,
-	groups_client_attr_list,
-	on_off_client_attr_list,
-	level_control_client_attr_list);
+/* Custom cluster list for Dimmer Switch device containing Temp Measurement client cluster */
+zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
+{
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_ARRAY_SIZE(basic_server_attr_list, zb_zcl_attr_t),
+		(basic_server_attr_list),
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_ARRAY_SIZE(identify_server_attr_list, zb_zcl_attr_t),
+		(identify_server_attr_list),
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_ARRAY_SIZE(identify_client_attr_list, zb_zcl_attr_t),
+		(identify_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_SCENES,
+		ZB_ZCL_ARRAY_SIZE(scenes_client_attr_list, zb_zcl_attr_t),
+		(scenes_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_GROUPS,
+		ZB_ZCL_ARRAY_SIZE(groups_client_attr_list, zb_zcl_attr_t),
+		(groups_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_ARRAY_SIZE(on_off_client_attr_list, zb_zcl_attr_t),
+		(on_off_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
+		ZB_ZCL_ARRAY_SIZE(level_control_client_attr_list, zb_zcl_attr_t),
+		(level_control_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+		0,
+		NULL,
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	)
+};
 
-/* Declare endpoint for Dimmer Switch device. */
-ZB_DECLARE_DIMMER_SWITCH_EP(
+/* Custom simple descriptor for Dimmer Switch with 2 IN and 6 OUT clusters */
+ZB_DECLARE_SIMPLE_DESC(2, 6);
+static ZB_AF_SIMPLE_DESC_TYPE(2, 6) simple_desc_dimmer_switch_ep =
+{
+	LIGHT_SWITCH_ENDPOINT,
+	ZB_AF_HA_PROFILE_ID,
+	ZB_DIMMER_SWITCH_DEVICE_ID,
+	ZB_DEVICE_VER_DIMMER_SWITCH,
+	0,
+	2,
+	6,
+	{
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_CLUSTER_ID_SCENES,
+		ZB_ZCL_CLUSTER_ID_GROUPS,
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT
+	}
+};
+
+/* Bind custom cluster list to Endpoint */
+ZB_AF_DECLARE_ENDPOINT_DESC(
 	dimmer_switch_ep,
 	LIGHT_SWITCH_ENDPOINT,
-	dimmer_switch_clusters);
+	ZB_AF_HA_PROFILE_ID,
+	0,
+	NULL,
+	ZB_ZCL_ARRAY_SIZE(dimmer_switch_clusters, zb_zcl_cluster_desc_t),
+	dimmer_switch_clusters,
+	(zb_af_simple_desc_1_1_t *)&simple_desc_dimmer_switch_ep,
+	0, NULL,
+	0, NULL
+);
 
 /* Declare application's device context (list of registered endpoints)
  * for Dimmer Switch device.
@@ -241,42 +328,139 @@ static void write_attr_callback(zb_bufid_t bufid)
 	zb_buf_free(bufid);
 }
 
+
+const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
+uint8_t address = 0x77;
+
+typedef struct {
+    int16_t  ac1;
+    int16_t  ac2;
+    int16_t  ac3;
+    uint16_t ac4;
+    uint16_t ac5;
+    uint16_t ac6;
+    int16_t  b1;
+    int16_t  b2;
+    int16_t  mb;
+    int16_t  mc;
+    int16_t  md;
+} bmp180_calib_t;
+
+static bmp180_calib_t calib_data;
+
+void bmp_init()
+{
+    uint8_t calib_reg = 0xAA;
+    uint8_t calib_read[22]; 
+    
+    i2c_write_read(i2c_dev, address, &calib_reg, 1, calib_read, 22);
+
+    calib_data.ac1 = (calib_read[0 ] << 8) | calib_read[1 ];
+    calib_data.ac2 = (calib_read[2 ] << 8) | calib_read[3 ];
+    calib_data.ac3 = (calib_read[4 ] << 8) | calib_read[5 ];
+    calib_data.ac4 = (calib_read[6 ] << 8) | calib_read[7 ];
+    calib_data.ac5 = (calib_read[8 ] << 8) | calib_read[9 ];
+    calib_data.ac6 = (calib_read[10] << 8) | calib_read[11];
+    calib_data.b1  = (calib_read[12] << 8) | calib_read[13];
+    calib_data.b2  = (calib_read[14] << 8) | calib_read[15];
+    calib_data.mb  = (calib_read[16] << 8) | calib_read[17];
+    calib_data.mc  = (calib_read[18] << 8) | calib_read[19];
+    calib_data.md  = (calib_read[20] << 8) | calib_read[21];
+    
+    printk("BMP180 Calibration Data Loaded Successfully.\n");
+}
+
+
+uint32_t read_temperature()
+{
+    // read uncompressed temperature value
+    uint8_t reg_addr = 0xF4;
+    uint8_t command = 0x2E;
+    uint8_t buffer[2] = {reg_addr, command};
+    i2c_write(i2c_dev, buffer, 2, address);
+    
+    // wait for temp readout
+    k_msleep(5);
+    
+    uint8_t ut_reg = 0xF6;
+    uint8_t ut_buffer[2];
+    i2c_write_read(i2c_dev, address, &ut_reg, 1, ut_buffer, 2);
+
+
+    int32_t UT = (int32_t)((ut_buffer[0] << 8) | ut_buffer[1]);
+    // printk("UT: 0x%08X\n", UT);
+
+    int32_t X1, X2, B5, T;
+    X1 = (UT - (int32_t)calib_data.ac6) * (int32_t)calib_data.ac5 / (1 << 15);
+    X2 = ((int32_t)calib_data.mc * (1 << 11)) / (X1 + (int32_t)calib_data.md);
+    B5 = X1 + X2;
+    T = (B5 + 8) / (1 << 4);
+
+    printk("Temperature: %d.%d C\n", T / 10, T % 10);
+	return((uint32_t)T);
+}
+
+// int main(void)
+// {
+//     if (!device_is_ready(i2c_dev)) {
+//         printk("Cannot init I2C\n");
+//         return 0;
+//     }
+
+//     // Send empty packet to address / ping
+//     uint8_t data = 0;
+//     if (i2c_write(i2c_dev, &data, 0, address) == 0) {
+//         printk("Device found at : 0x%02X\n", address);
+//     }
+    
+//     //read_calibration();
+//     bmp_init();
+//     read_temperature();
+    
+//     return 0;
+// }
+
+
 static void send_random_string_cb(zb_bufid_t bufid)
 {
-	char rand_str[17];
-	const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	for (size_t i = 0; i < 16; i++) {
-		uint32_t val = sys_rand32_get();
-		rand_str[i] = charset[val % (sizeof(charset) - 1)];
-	}
-	rand_str[16] = '\0';
-
-	LOG_INF("Generated random string to send: %s", rand_str);
+	// 1. Reduci containerul local de la 32 de biti la 16 biti cu semn
+	zb_int16_t temp_serialized = (zb_int16_t)read_temperature();
 
 	zb_uint8_t *ptr;
 	ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
 
-	static zb_uint8_t zcl_str[18];
-	zcl_str[0] = 16;
-	memcpy(&zcl_str[1], rand_str, 16);
-
+	// 2. Transmiti tipul S16 si adresa variabilei de 16 biti
 	ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
 		ptr,
-		ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID,
-		ZB_ZCL_ATTR_TYPE_CHAR_STRING,
-		zcl_str);
+		ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
+		ZB_ZCL_ATTR_TYPE_S16,
+		(zb_uint8_t *)&temp_serialized);
+	
+    // uint32_t temperature = read_temperature();
 
-	zb_uint16_t coord_addr = 0x0000;
-	ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
-		bufid,
-		ptr,
-		coord_addr, /* Pass variable since the macro takes its address */
-		ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
-		10, /* ZIGBEE_COORDINATOR_ENDPOINT */
-		LIGHT_SWITCH_ENDPOINT,
-		ZB_AF_HA_PROFILE_ID,
-		ZB_ZCL_CLUSTER_ID_BASIC,
-		write_attr_callback);
+    // zb_uint8_t *ptr;
+    // ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+
+    // // Nota: Daca temperatura este stocata ca intreg pe 16 biti (S16) conform standardului ZCL Temp Measurement:
+    // // zb_int16_t temp_raw = (zb_int16_t)temperature;
+    
+    // ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
+    //     ptr,
+    //     ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
+    //     ZB_ZCL_ATTR_TYPE_S32,
+    //     (zb_uint32_t *)&temperature); // Sau &temp_raw
+	
+    zb_uint16_t coord_addr = 0x0000;
+    ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
+        bufid,
+        ptr,
+        coord_addr,
+        ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
+        10, /* ZIGBEE_COORDINATOR_ENDPOINT */
+        LIGHT_SWITCH_ENDPOINT,
+        ZB_AF_HA_PROFILE_ID,
+        ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+        write_attr_callback);
 }
 
 /**@brief Callback for button events.
@@ -877,6 +1061,9 @@ int main(void)
 	configure_gpio();
 	alarm_timers_init();
 	register_factory_reset_button(FACTORY_RESET_BUTTON);
+	
+	bmp_init();
+    
 
 	zigbee_erase_persistent_storage(ERASE_PERSISTENT_CONFIG);
 	zb_set_ed_timeout(ED_AGING_TIMEOUT_64MIN);

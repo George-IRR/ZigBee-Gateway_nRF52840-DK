@@ -20,6 +20,9 @@
 #include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
 
+// BMP180
+#include <stdlib.h>
+
 #define RUN_STATUS_LED                         DK_LED1
 #define RUN_LED_BLINK_INTERVAL                 1000
 
@@ -92,6 +95,18 @@ ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST_EXT(
 	&dev_ctx.basic_attr.ph_env,
 	dev_ctx.basic_attr.sw_ver);
 
+static zb_int16_t temp_meas_value = 0;
+static zb_int16_t temp_meas_min = -5000;  // -50.00 C
+static zb_int16_t temp_meas_max = 10000; // 100.00 C
+static zb_uint16_t temp_meas_tolerance = 0;
+
+ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(temp_measurement_attr_list, ZB_ZCL_TEMP_MEASUREMENT)
+  ZB_ZCL_SET_ATTR_DESC_M(ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, &temp_meas_value, ZB_ZCL_ATTR_TYPE_S16, ZB_ZCL_ATTR_ACCESS_READ_WRITE | ZB_ZCL_ATTR_ACCESS_REPORTING)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_MIN_VALUE_ID, &temp_meas_min)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_MAX_VALUE_ID, &temp_meas_max)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_TOLERANCE_ID, &temp_meas_tolerance)
+ZB_ZCL_FINISH_DECLARE_ATTRIB_LIST;
+
 /* Construct a custom cluster array explicitly declaring Basic, Identify, and On/Off Server support */
 static zb_zcl_cluster_desc_t nwk_coordinator_clusters[] = {
 	ZB_ZCL_CLUSTER_DESC(
@@ -114,25 +129,32 @@ static zb_zcl_cluster_desc_t nwk_coordinator_clusters[] = {
 		on_off_attr_list,
 		ZB_ZCL_CLUSTER_SERVER_ROLE,
 		0
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+		ZB_ZCL_ARRAY_SIZE(temp_measurement_attr_list, zb_zcl_attr_t),
+		temp_measurement_attr_list,
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		0
 	)
 };
 
-/* Declare simple descriptor structure space for 3 input clusters and 0 output clusters */
-ZB_DECLARE_SIMPLE_DESC(3, 0);
+/* Declare simple descriptor structure space for 4 input clusters and 0 output clusters */
+ZB_DECLARE_SIMPLE_DESC(4, 0);
 
-/* Define and instantiate the Simple Descriptor values */
-static ZB_AF_SIMPLE_DESC_TYPE(3, 0) simple_desc_nwk_coordinator_ep = {
+static ZB_AF_SIMPLE_DESC_TYPE(4, 0) simple_desc_nwk_coordinator_ep = {
 	ZIGBEE_COORDINATOR_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
 	0, /* Application Device ID */
 	0, /* Application Device Version */
 	0, /* Reserved flags */
-	3, /* Input cluster count */
+	4, /* 4 input clusters*/
 	0, /* Output cluster count */
 	{
 		ZB_ZCL_CLUSTER_ID_BASIC,
 		ZB_ZCL_CLUSTER_ID_IDENTIFY,
-		ZB_ZCL_CLUSTER_ID_ON_OFF
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT
 	}
 };
 
@@ -141,12 +163,12 @@ ZB_AF_DECLARE_ENDPOINT_DESC(
 	nwk_coordinator_ep,
 	ZIGBEE_COORDINATOR_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
-	0, NULL, /* Reserved context details */
+	0, NULL,
 	ZB_ZCL_ARRAY_SIZE(nwk_coordinator_clusters, zb_zcl_cluster_desc_t),
 	nwk_coordinator_clusters,
-	(zb_af_simple_desc_1_1_t*)&simple_desc_nwk_coordinator_ep,
-	0, NULL, /* No reporting configurations mapped here */
-	0, NULL  /* No level control contexts defined */
+	(zb_af_simple_desc_1_1_t*)&simple_desc_nwk_coordinator_ep, 
+	0, NULL,
+	0, NULL 
 );
 
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(
@@ -328,6 +350,7 @@ static void configure_gpio(void)
 	}
 }
 
+
 static void zcl_device_cb(zb_bufid_t bufid)
 {
 	zb_zcl_device_callback_param_t *device_cb_param =
@@ -336,10 +359,10 @@ static void zcl_device_cb(zb_bufid_t bufid)
 	if (device_cb_param->device_cb_id == ZB_ZCL_SET_ATTR_VALUE_CB_ID) {
 		zb_zcl_set_attr_value_param_t *cb_param = &(device_cb_param->cb_param.set_attr_value_param);
 		
+		// ON OFF Switch LOGIC
 		if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_ON_OFF &&
 		    cb_param->attr_id == ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) {
 			
-			/* Access 1-byte data variables via data8 element union structures */
 			zb_uint8_t value = cb_param->values.data8;
 			LOG_INF("Data packet received via attribute update! Value: %d", value);
 			if (value == 1) {
@@ -347,21 +370,17 @@ static void zcl_device_cb(zb_bufid_t bufid)
 			} else {
 				LOG_INF("Command parsed: Turn OFF");
 			}
-		} else if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_BASIC &&
-		           cb_param->attr_id == ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID) {
+		} 
+		
+		else if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT &&
+		         cb_param->attr_id == ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID) {
 
-			/* Read from the attribute storage (Pascal string: [len][data...]) */
-			zb_uint8_t *zcl_str = (zb_uint8_t *)dev_ctx.basic_attr.location_id;
-			zb_uint8_t len = zcl_str[0];
-			if (len > 16) {
-				len = 16;
-			}
+			zb_int16_t temperature_raw = (zb_int16_t)cb_param->values.data16;
 
-			static char print_buf[17];
-			memcpy(print_buf, &zcl_str[1], len);
-			print_buf[len] = '\0';
-
-			LOG_INF("zcl_device_cb - Received random string: %s (length: %d)", print_buf, len);
+			LOG_INF("zcl_device_cb - Temperature: %d.%d C (Raw value: %d)", 
+			        temperature_raw / 10, 
+			        abs(temperature_raw % 10), 
+			        temperature_raw);
 		}
 	}
 	device_cb_param->status = RET_OK;
@@ -493,6 +512,14 @@ static void modify_attr_value_callback(zb_uint8_t ep, zb_uint16_t cluster_id, zb
 		print_buf[len] = '\0';
 		
 		LOG_INF("Received custom random string payload: %s (length: %d)", print_buf, len);
+	} else if (cluster_id == ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT &&
+	           attr_id == ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID) {
+		
+		zb_int16_t temperature_raw = *(zb_int16_t *)value;
+		LOG_INF("modify_attr_value_callback - Temperature: %d.%d C (Raw value: %d)", 
+		        temperature_raw / 10, 
+		        abs(temperature_raw % 10), 
+		        temperature_raw);
 	}
 }
 

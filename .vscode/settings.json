@@ -2,7 +2,6 @@
     "nrf-connect.applications": [
         "${workspaceFolder}/end_device_nrf",
         "${workspaceFolder}/zigbee_end_device/light_switch",
-        "${workspaceFolder}/zigbee_end_device/light_bulb",
         "${workspaceFolder}/zigbee_end_device/bmp180",
         "${workspaceFolder}/zigbee_network/network_coordinator"
     ],

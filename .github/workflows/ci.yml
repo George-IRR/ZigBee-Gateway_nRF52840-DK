@@ -59,11 +59,6 @@ jobs:
         with:
           path: project # Checkout project in a subdirectory to avoid conflicting with the container's SDK files
 
-      - name: Add local bin to PATH
-        run: |
-          echo "/root/.local/bin" >> $GITHUB_PATH
-
-
       - name: Initialize CCache
         uses: actions/cache@v4
         with:
@@ -75,12 +70,12 @@ jobs:
       - name: Build Firmware (Sysbuild)
         if: ${{ matrix.sysbuild == true }}
         run: |
-          west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build --sysbuild
+          nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build --sysbuild
 
       - name: Build Firmware (Standard)
         if: ${{ matrix.sysbuild == false }}
         run: |
-          west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build
+          nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s project/${{ matrix.app-path }} -d project/${{ matrix.app-path }}/build
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4

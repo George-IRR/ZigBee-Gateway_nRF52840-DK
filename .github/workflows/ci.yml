@@ -67,6 +67,15 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.app-path }}-
 
+      - name: Debug Environment
+        run: |
+          pwd
+          echo "github workspace: ${{ github.workspace }}"
+          ls -la ${{ github.workspace }} || true
+          ls -la /workdir || true
+          echo "tree github workspace:"
+          find ${{ github.workspace }} -maxdepth 3 || true
+
       - name: Build Firmware (Sysbuild)
         if: ${{ matrix.sysbuild == true }}
         run: |

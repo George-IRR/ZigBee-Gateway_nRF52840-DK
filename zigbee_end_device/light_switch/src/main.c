@@ -33,15 +33,6 @@
 #include <osif/mac_platform.h>
 #endif
 
-#if CONFIG_ZIGBEE_FOTA
-#include <zigbee/zigbee_fota.h>
-#include <zephyr/sys/reboot.h>
-#include <zephyr/dfu/mcuboot.h>
-
-/* LED indicating OTA Client Activity. */
-#define OTA_ACTIVITY_LED          DK_LED2
-#endif /* CONFIG_ZIGBEE_FOTA */
-
 #if CONFIG_BT_NUS
 #include "nus_cmd.h"
 
@@ -263,19 +254,7 @@ ZB_AF_DECLARE_ENDPOINT_DESC(
 /* Declare application's device context (list of registered endpoints)
  * for Dimmer Switch device.
  */
-#ifndef CONFIG_ZIGBEE_FOTA
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(dimmer_switch_ctx, dimmer_switch_ep);
-#else
-
-  #if LIGHT_SWITCH_ENDPOINT == CONFIG_ZIGBEE_FOTA_ENDPOINT
-    #error "Light switch and Zigbee OTA endpoints should be different."
-  #endif
-
-extern zb_af_endpoint_desc_t zigbee_fota_client_ep;
-ZBOSS_DECLARE_DEVICE_CTX_2_EP(dimmer_switch_ctx,
-			      zigbee_fota_client_ep,
-			      dimmer_switch_ep);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /* Forward declarations. */
 static void light_switch_button_handler(struct k_timer *timer);
@@ -399,27 +378,6 @@ uint32_t read_temperature()
     printk("Temperature: %d.%d C\n", T / 10, T % 10);
 	return((uint32_t)T);
 }
-
-// int main(void)
-// {
-//     if (!device_is_ready(i2c_dev)) {
-//         printk("Cannot init I2C\n");
-//         return 0;
-//     }
-
-//     // Send empty packet to address / ping
-//     uint8_t data = 0;
-//     if (i2c_write(i2c_dev, &data, 0, address) == 0) {
-//         printk("Device found at : 0x%02X\n", address);
-//     }
-    
-//     //read_calibration();
-//     bmp_init();
-//     read_temperature();
-    
-//     return 0;
-// }
-
 
 static void send_random_string_cb(zb_bufid_t bufid)
 {
@@ -789,63 +747,7 @@ static void light_switch_button_handler(struct k_timer *timer)
 	}
 }
 
-#ifdef CONFIG_ZIGBEE_FOTA
-static void confirm_image(void)
-{
-	if (!boot_is_img_confirmed()) {
-		int ret = boot_write_img_confirmed();
 
-		if (ret) {
-			LOG_ERR("Couldn't confirm image: %d", ret);
-		} else {
-			LOG_INF("Marked image as OK");
-		}
-	}
-}
-
-static void ota_evt_handler(const struct zigbee_fota_evt *evt)
-{
-	switch (evt->id) {
-	case ZIGBEE_FOTA_EVT_PROGRESS:
-		dk_set_led(OTA_ACTIVITY_LED, evt->dl.progress % 2);
-		break;
-
-	case ZIGBEE_FOTA_EVT_FINISHED:
-		LOG_INF("Reboot application.");
-		/* Power on unused sections of RAM to allow MCUboot to use it. */
-		if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
-			power_up_unused_ram();
-		}
-
-		sys_reboot(SYS_REBOOT_COLD);
-		break;
-
-	case ZIGBEE_FOTA_EVT_ERROR:
-		LOG_ERR("OTA image transfer failed.");
-		break;
-
-	default:
-		break;
-	}
-}
-
-/**@brief Callback function for handling ZCL commands.
- *
- * @param[in]   bufid   Reference to Zigbee stack buffer
- *                      used to pass received data.
- */
-static void zcl_device_cb(zb_bufid_t bufid)
-{
-	zb_zcl_device_callback_param_t *device_cb_param =
-		ZB_BUF_GET_PARAM(bufid, zb_zcl_device_callback_param_t);
-
-	if (device_cb_param->device_cb_id == ZB_ZCL_OTA_UPGRADE_VALUE_CB_ID) {
-		zigbee_fota_zcl_cb(bufid);
-	} else {
-		device_cb_param->status = RET_NOT_IMPLEMENTED;
-	}
-}
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /**@brief Zigbee stack event handler.
  *
@@ -861,10 +763,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	/* Update network status LED. */
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Pass signal to the OTA client implementation. */
-	zigbee_fota_signal_handler(bufid);
-#endif /* CONFIG_ZIGBEE_FOTA */
+
 
 	switch (sig) {
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
@@ -910,65 +809,65 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 }
 
-#if CONFIG_BT_NUS
+	#if CONFIG_BT_NUS
 
-static void turn_on_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_ON_ID, 0);
-}
+	static void turn_on_cmd(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
+					ZB_ZCL_CMD_ON_OFF_ON_ID, 0);
+	}
 
-static void turn_off_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_OFF_ID, 0);
-}
+	static void turn_off_cmd(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
+					ZB_ZCL_CMD_ON_OFF_OFF_ID, 0);
+	}
 
-static void toggle_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_TOGGLE_ID, 0);
-}
+	static void toggle_cmd(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
+					ZB_ZCL_CMD_ON_OFF_TOGGLE_ID, 0);
+	}
 
-static void increase_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP, 0);
-}
+	static void increase_cmd(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		zb_buf_get_out_delayed_ext(light_switch_send_step,
+					ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP, 0);
+	}
 
-static void decrease_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN, 0);
-}
+	static void decrease_cmd(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		zb_buf_get_out_delayed_ext(light_switch_send_step,
+					ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN, 0);
+	}
 
-static void on_nus_connect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_on(NUS_STATUS_LED);
-}
+	static void on_nus_connect(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		dk_set_led_on(NUS_STATUS_LED);
+	}
 
-static void on_nus_disconnect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_off(NUS_STATUS_LED);
-}
+	static void on_nus_disconnect(struct k_work *item)
+	{
+		ARG_UNUSED(item);
+		dk_set_led_off(NUS_STATUS_LED);
+	}
 
-static struct nus_entry commands[] = {
-	NUS_COMMAND(COMMAND_ON, turn_on_cmd),
-	NUS_COMMAND(COMMAND_OFF, turn_off_cmd),
-	NUS_COMMAND(COMMAND_TOGGLE, toggle_cmd),
-	NUS_COMMAND(COMMAND_INCREASE, increase_cmd),
-	NUS_COMMAND(COMMAND_DECREASE, decrease_cmd),
-	NUS_COMMAND(NULL, NULL),
-};
+	static struct nus_entry commands[] = {
+		NUS_COMMAND(COMMAND_ON, turn_on_cmd),
+		NUS_COMMAND(COMMAND_OFF, turn_off_cmd),
+		NUS_COMMAND(COMMAND_TOGGLE, toggle_cmd),
+		NUS_COMMAND(COMMAND_INCREASE, increase_cmd),
+		NUS_COMMAND(COMMAND_DECREASE, decrease_cmd),
+		NUS_COMMAND(NULL, NULL),
+	};
 
-#endif /* CONFIG_BT_NUS */
+	#endif /* CONFIG_BT_NUS */
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 
@@ -1081,27 +980,16 @@ int main(void)
 	 * is pressed.
 	 */
 	
-#if defined BUTTON_SLEEPY
+	#if defined BUTTON_SLEEPY
 	if (dk_get_buttons() & BUTTON_SLEEPY) {
 		zigbee_configure_sleepy_behavior(true);
 	}
-#endif
+	#endif
 
 	/* Power off unused sections of RAM to lower device power consumption. */
 	if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
 		power_down_unused_ram();
 	}
-
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Initialize Zigbee FOTA download service. */
-	zigbee_fota_init(ota_evt_handler);
-
-	/* Mark the current firmware as valid. */
-	confirm_image();
-
-	/* Register callback for handling ZCL commands. */
-	ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 	/* Register dimmer switch device context (endpoints). */
 	ZB_AF_REGISTER_DEVICE_CTX(&dimmer_switch_ctx);
@@ -1110,21 +998,19 @@ int main(void)
 
 	/* Register handlers to identify notifications */
 	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(LIGHT_SWITCH_ENDPOINT, identify_cb);
-#ifdef CONFIG_ZIGBEE_FOTA
-	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(CONFIG_ZIGBEE_FOTA_ENDPOINT, identify_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
-#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
-	set_tx_power();
-#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
+
+	#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
+		set_tx_power();
+	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 
-#if CONFIG_BT_NUS
-	/* Initialize NUS command service. */
-	nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
-#endif /* CONFIG_BT_NUS */
+	#if CONFIG_BT_NUS
+		/* Initialize NUS command service. */
+		nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
+	#endif /* CONFIG_BT_NUS */
 
 	LOG_INF("ZBOSS Light Switch example started");
 

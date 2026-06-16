@@ -33,23 +33,6 @@
 #include <osif/mac_platform.h>
 #endif
 
-#if CONFIG_BT_NUS
-#include "nus_cmd.h"
-
-/* LED which indicates that Central is connected. */
-#define NUS_STATUS_LED            DK_LED1
-/* UART command that will turn on found light bulb(s). */
-#define COMMAND_ON                "n"
-/**< UART command that will turn off found light bulb(s). */
-#define COMMAND_OFF               "f"
-/**< UART command that will turn toggle found light bulb(s). */
-#define COMMAND_TOGGLE            "t"
-/**< UART command that will increase brightness of found light bulb(s). */
-#define COMMAND_INCREASE          "i"
-/**< UART command that will decrease brightness of found light bulb(s). */
-#define COMMAND_DECREASE          "d"
-#endif /* CONFIG_BT_NUS */
-
 /* Source endpoint used to control light bulb. */
 #define LIGHT_SWITCH_ENDPOINT      1
 /* Delay between the light switch startup and light bulb finding procedure. */
@@ -809,66 +792,6 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 }
 
-	#if CONFIG_BT_NUS
-
-	static void turn_on_cmd(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-					ZB_ZCL_CMD_ON_OFF_ON_ID, 0);
-	}
-
-	static void turn_off_cmd(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-					ZB_ZCL_CMD_ON_OFF_OFF_ID, 0);
-	}
-
-	static void toggle_cmd(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-					ZB_ZCL_CMD_ON_OFF_TOGGLE_ID, 0);
-	}
-
-	static void increase_cmd(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		zb_buf_get_out_delayed_ext(light_switch_send_step,
-					ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP, 0);
-	}
-
-	static void decrease_cmd(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		zb_buf_get_out_delayed_ext(light_switch_send_step,
-					ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN, 0);
-	}
-
-	static void on_nus_connect(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		dk_set_led_on(NUS_STATUS_LED);
-	}
-
-	static void on_nus_disconnect(struct k_work *item)
-	{
-		ARG_UNUSED(item);
-		dk_set_led_off(NUS_STATUS_LED);
-	}
-
-	static struct nus_entry commands[] = {
-		NUS_COMMAND(COMMAND_ON, turn_on_cmd),
-		NUS_COMMAND(COMMAND_OFF, turn_off_cmd),
-		NUS_COMMAND(COMMAND_TOGGLE, toggle_cmd),
-		NUS_COMMAND(COMMAND_INCREASE, increase_cmd),
-		NUS_COMMAND(COMMAND_DECREASE, decrease_cmd),
-		NUS_COMMAND(NULL, NULL),
-	};
-
-	#endif /* CONFIG_BT_NUS */
-
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 
 /**@brief Callback for TX power setting result.
@@ -1006,11 +929,6 @@ int main(void)
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();
-
-	#if CONFIG_BT_NUS
-		/* Initialize NUS command service. */
-		nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
-	#endif /* CONFIG_BT_NUS */
 
 	LOG_INF("ZBOSS Light Switch example started");
 

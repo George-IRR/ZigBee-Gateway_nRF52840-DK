@@ -290,7 +290,6 @@ static void write_attr_callback(zb_bufid_t bufid)
 	zb_buf_free(bufid);
 }
 
-
 const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
 uint8_t address = 0x77;
 
@@ -875,6 +874,22 @@ void set_tx_power(void)
 
 #endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
+//#include <soc.h>
+#include <my_nrf52_timer.h>
+
+void timer_init()
+{
+	MY_TIMER1->BITMODE   = 3;
+	MY_TIMER1->PRESCALER = 4; // 16MHz / 2^4 = 1 MHz -> 1 us / clk
+}
+
+void timer_start()
+{
+	MY_TIMER1->TASKS_START = 1;
+	// uint32_t timer_time = NRF_TIMER0->CC0;
+	// printk(timer_time);
+}
+
 int main(void)
 {
 	LOG_INF("Starting ZBOSS Light Switch example");
@@ -931,8 +946,14 @@ int main(void)
 	zigbee_enable();
 
 	LOG_INF("ZBOSS Light Switch example started");
-
+	timer_init();
+	timer_start();
 	while (1) {
-		k_sleep(K_FOREVER);
+		MY_TIMER1->TASKS_CAPTURE1 = 1;
+		uint32_t timer_time = MY_TIMER1->CC1;
+		printk("Timer ticks (us): %u\n", timer_time);
+
+		
+		k_msleep(500);
 	}
 }

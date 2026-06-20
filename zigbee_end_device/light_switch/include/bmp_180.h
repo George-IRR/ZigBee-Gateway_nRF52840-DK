@@ -16,6 +16,6 @@ int bmp180_init(void);
  * @return The temperature in tenths of a degree Celsius (e.g. 254 for 25.4°C),
  *         or 0 if reading fails.
  */
-int32_t bmp180_read_temperature(void);
+int bmp180_read_temperature(int32_t *temp_out);
 
 #endif // BMP_180_H

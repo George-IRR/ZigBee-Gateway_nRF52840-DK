@@ -58,14 +58,18 @@ int bmp180_init(void)
     return 0;
 }
 
-int32_t bmp180_read_temperature(void)
+// Returnează 0 la succes, sau un cod negativ la eroare
+int bmp180_read_temperature(int32_t *temp_out)
 {
-    if (!device_is_ready(i2c_dev)) {
-        LOG_ERR("I2C device not ready during temp read");
-        return 0;
+    if (temp_out == NULL) {
+        return -EINVAL; 
     }
 
-    // Read uncompressed temperature value
+    if (!device_is_ready(i2c_dev)) {
+        LOG_ERR("I2C device not ready during temp read");
+        return -ENODEV; 
+    }
+
     uint8_t reg_addr = 0xF4;
     uint8_t command = 0x2E;
     uint8_t buffer[2] = {reg_addr, command};
@@ -74,10 +78,9 @@ int32_t bmp180_read_temperature(void)
     ret = i2c_write(i2c_dev, buffer, 2, BMP180_I2C_ADDR);
     if (ret < 0) {
         LOG_ERR("Failed to write temperature readout command (err %d)", ret);
-        return 0;
+        return ret;
     }
     
-    // Wait for temperature readout
     k_msleep(5);
     
     uint8_t ut_reg = 0xF6;
@@ -85,7 +88,7 @@ int32_t bmp180_read_temperature(void)
     ret = i2c_write_read(i2c_dev, BMP180_I2C_ADDR, &ut_reg, 1, ut_buffer, 2);
     if (ret < 0) {
         LOG_ERR("Failed to read temperature register (err %d)", ret);
-        return 0;
+        return ret;
     }
 
     int32_t UT = (int32_t)((ut_buffer[0] << 8) | ut_buffer[1]);
@@ -97,5 +100,8 @@ int32_t bmp180_read_temperature(void)
     T = (B5 + 8) / (1 << 4);
 
     LOG_INF("Temperature: %d.%d C", T / 10, T % 10);
-    return T;
+    
+    *temp_out = T; 
+    
+    return 0; // Succes!
 }

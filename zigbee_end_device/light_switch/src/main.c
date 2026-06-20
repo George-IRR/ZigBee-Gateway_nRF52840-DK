@@ -287,18 +287,28 @@ static void write_attr_callback(zb_bufid_t bufid)
 
 static void send_temperature_cb(zb_bufid_t bufid)
 {
-	zb_int16_t temp_serialized = (zb_int16_t)bmp180_read_temperature();
+    int32_t temp_raw;
+    int err = bmp180_read_temperature(&temp_raw);
 
-	zb_uint8_t *ptr;
-	ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+    if (err != 0) {
+        LOG_ERR("Failed to read BMP180: %d", err);
+        zb_buf_free(bufid);
+        return;
+    }
 
-	ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
-		ptr,
-		ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
-		ZB_ZCL_ATTR_TYPE_S16,
-		(zb_uint8_t *)&temp_serialized);
-	
+    zb_int16_t temp_zigbee = (zb_int16_t)(temp_raw);
+    zb_uint8_t *ptr;
+
+    ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+
+    ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
+        ptr,
+        ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
+        ZB_ZCL_ATTR_TYPE_S16,
+        (zb_uint8_t *)&temp_zigbee);
+    
     zb_uint16_t coord_addr = 0x0000;
+	
     ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
         bufid,
         ptr,

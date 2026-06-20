@@ -362,7 +362,7 @@ uint32_t read_temperature()
 	return((uint32_t)T);
 }
 
-static void send_random_string_cb(zb_bufid_t bufid)
+static void send_temperature_cb(zb_bufid_t bufid)
 {
 	// 1. Reduci containerul local de la 32 de biti la 16 biti cu semn
 	zb_int16_t temp_serialized = (zb_int16_t)read_temperature();
@@ -479,7 +479,7 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 			ZB_ERROR_CHECK(zb_err_code);
 
 			/* Queue custom random string transmission */
-			zb_ret_t rand_err = zb_buf_get_out_delayed(send_random_string_cb);
+			zb_ret_t rand_err = zb_buf_get_out_delayed(send_temperature_cb);
 			if (rand_err != RET_OK) {
 				LOG_ERR("Failed to queue random string transmission (err %d)", rand_err);
 			}

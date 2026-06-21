@@ -58,5 +58,14 @@ uint32_t my_rtc_get_value(my_rtc_instance_t rtc_idx);
 void     my_rtc_start_compare(my_rtc_instance_t rtc_idx, uint8_t channel, uint32_t compare_value);
 bool     my_rtc_get_compare_event(my_rtc_instance_t rtc_idx, uint8_t channel);
 void     my_rtc_clear_compare_event(my_rtc_instance_t rtc_idx, uint8_t channel);
+void     my_rtc_enable_interrupt(my_rtc_instance_t rtc_idx, uint32_t mask);
+void     my_rtc_disable_interrupt(my_rtc_instance_t rtc_idx, uint32_t mask);
+
+#define MY_RTC_INT_TICK_MASK      (1UL << 0)
+#define MY_RTC_INT_OVRFLW_MASK    (1UL << 1)
+#define MY_RTC_INT_COMPARE0_MASK  (1UL << 16)
+#define MY_RTC_INT_COMPARE1_MASK  (1UL << 17)
+#define MY_RTC_INT_COMPARE2_MASK  (1UL << 18)
+#define MY_RTC_INT_COMPARE3_MASK  (1UL << 19)
 
 #endif // MY_RTC_H

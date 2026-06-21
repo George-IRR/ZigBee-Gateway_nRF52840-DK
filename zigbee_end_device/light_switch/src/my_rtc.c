@@ -77,3 +77,19 @@ void my_rtc_clear_compare_event(my_rtc_instance_t rtc_idx, uint8_t channel)
 
    rtc->EVENTS_COMPARE[channel] = 0;
 }
+
+void my_rtc_enable_interrupt(my_rtc_instance_t rtc_idx, uint32_t mask)
+{
+    My_RTC_Type *rtc = get_rtc_pointer(rtc_idx);
+    if (!rtc) return;
+
+    rtc->INTENSET = mask;
+}
+
+void my_rtc_disable_interrupt(my_rtc_instance_t rtc_idx, uint32_t mask)
+{
+    My_RTC_Type *rtc = get_rtc_pointer(rtc_idx);
+    if (!rtc) return;
+
+    rtc->INTENCLR = mask;
+}

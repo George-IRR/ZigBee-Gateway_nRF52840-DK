@@ -855,8 +855,8 @@ int main(void)
     my_timer_init(MY_TIMER_1, 4);
     my_timer_start(MY_TIMER_1);
 
-	my_rtc_init(2,0);
-	my_rtc_start_compare(2,1,50000);
+	my_rtc_init(2, 4095); //125 ms / tick
+	my_rtc_start_compare(2,1,32);
 	my_rtc_start(2);
 	k_msleep(10);
 
@@ -865,7 +865,7 @@ int main(void)
 			printk("Tick happened\n");
 			my_rtc_clear_compare_event(2, 1);
 			
-			uint32_t next_compare = (my_rtc_get_value(2) + 50000) & 0x00FFFFFF;
+			uint32_t next_compare = (my_rtc_get_value(2) + 32) & 0x00FFFFFF;
 			my_rtc_start_compare(2, 1, next_compare);
 		}
     }

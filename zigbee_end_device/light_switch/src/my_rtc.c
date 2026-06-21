@@ -10,7 +10,7 @@ static My_RTC_Type* get_rtc_pointer(my_rtc_instance_t rtc_idx)
     }
 }
 
-void my_rtc_init(my_rtc_instance_t rtc_idx, uint8_t prescaler)
+void my_rtc_init(my_rtc_instance_t rtc_idx, uint16_t prescaler)
 {
     My_RTC_Type *rtc = get_rtc_pointer(rtc_idx);
     if (!rtc) return; 

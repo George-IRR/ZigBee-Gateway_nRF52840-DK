@@ -861,12 +861,12 @@ int main(void)
 	k_msleep(10);
 
     while (1) {
-		if (my_rtc_get_compare_event(2, 1)) {
+		if (my_rtc_get_compare_event(2, 1)) 
+		{
 			printk("Tick happened\n");
 			my_rtc_clear_compare_event(2, 1);
-			
-			uint32_t next_compare = (my_rtc_get_value(2) + 32) & 0x00FFFFFF;
-			my_rtc_start_compare(2, 1, next_compare);
+			my_rtc_clear(2);
+			my_rtc_start_compare(2,1,32);
 		}
     }
 

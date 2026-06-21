@@ -53,6 +53,7 @@ typedef enum {
 void     my_rtc_init(my_rtc_instance_t rtc_idx, uint16_t prescaler);
 void     my_rtc_start(my_rtc_instance_t rtc_idx);
 void     my_rtc_stop(my_rtc_instance_t rtc_idx);
+void     my_rtc_clear(my_rtc_instance_t rtc_idx);
 uint32_t my_rtc_get_value(my_rtc_instance_t rtc_idx);
 void     my_rtc_start_compare(my_rtc_instance_t rtc_idx, uint8_t channel, uint32_t compare_value);
 bool     my_rtc_get_compare_event(my_rtc_instance_t rtc_idx, uint8_t channel);

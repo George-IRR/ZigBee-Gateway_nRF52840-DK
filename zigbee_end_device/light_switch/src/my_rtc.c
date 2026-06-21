@@ -35,6 +35,14 @@ void my_rtc_stop(my_rtc_instance_t rtc_idx)
     rtc->TASKS_STOP = 1;
 }
 
+void my_rtc_clear(my_rtc_instance_t rtc_idx)
+{
+    My_RTC_Type *rtc = get_rtc_pointer(rtc_idx);
+    if (!rtc) return;
+
+    rtc->TASKS_CLEAR = 1;
+}
+
 uint32_t my_rtc_get_value(my_rtc_instance_t rtc_idx)
 {
     My_RTC_Type *rtc = get_rtc_pointer(rtc_idx);

@@ -50,7 +50,7 @@ typedef enum {
     MY_RTC_2
 } my_rtc_instance_t;
 
-void     my_rtc_init(my_rtc_instance_t rtc_idx, uint8_t prescaler);
+void     my_rtc_init(my_rtc_instance_t rtc_idx, uint16_t prescaler);
 void     my_rtc_start(my_rtc_instance_t rtc_idx);
 void     my_rtc_stop(my_rtc_instance_t rtc_idx);
 uint32_t my_rtc_get_value(my_rtc_instance_t rtc_idx);

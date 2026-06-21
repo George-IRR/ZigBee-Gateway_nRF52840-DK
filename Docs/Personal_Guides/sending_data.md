@@ -5,10 +5,18 @@ When you want to create a blank Zigbee project and send data (like sensor readin
 ---
 
 ### Step 1: Choose Your ZCL Cluster & Role
-In Zigbee, all data is organized into **Clusters** (functional domains) and **Attributes** (individual variables).
+In Zigbee, all data is organized into **Clusters** (functional domains represented by a 16-bit ID, e.g. `0x0402` for Temperature Measurement) and **Attributes** (individual variables within that cluster).
 * **The Coordinator (Server):** Holds the actual attribute database. It runs a **Server Cluster** (e.g. Temperature Measurement Server).
 * **The End Device (Client):** Gathers physical data and wants to send it to the coordinator. It runs a **Client Cluster** (e.g. Temperature Measurement Client).
 * **The Action:** The End Device sends a ZCL `Write Attributes` request over-the-air to overwrite the attribute value on the Coordinator.
+
+> [!IMPORTANT]
+> **What happens if you select the Cluster ID incorrectly?**
+>
+> If you specify the wrong Cluster ID (e.g., using `ZB_ZCL_CLUSTER_ID_ON_OFF` when you intend to send temperature data):
+> 1. **OTA Packet Rejection:** The destination device (Coordinator) filters incoming over-the-air packets. If the destination endpoint does not have the specified Cluster ID registered in its cluster list (as a server), the Zigbee APS/ZCL layer will reject the packet with an error (e.g., `Unsupported Cluster`) and drop it.
+> 2. **Callback Routing Failure:** ZBOSS dispatches attribute updates based on the Cluster ID. The modify callback registered via `ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB` checks the incoming cluster ID. If there is a mismatch, your handler will never be executed.
+> 3. **Service Discovery & Binding Failure:** During BDB commissioning, devices discover compatible endpoints using `Match Descriptor Request` queries matching specific Cluster IDs. If you do not use the correct ID, devices will fail to discover each other's matching clusters and cannot bind.
 
 ---
 

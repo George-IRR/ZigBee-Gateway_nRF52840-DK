@@ -793,6 +793,7 @@ void set_tx_power(void)
 #endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 #include <my_nrf52_timer.h>
+#include <my_rtc.h>
 
 int main(void)
 {
@@ -854,10 +855,19 @@ int main(void)
     my_timer_init(MY_TIMER_1, 4);
     my_timer_start(MY_TIMER_1);
 
+	my_rtc_init(2,0);
+	my_rtc_start_compare(2,1,50000);
+	my_rtc_start(2);
+	k_msleep(10);
+
     while (1) {
-        uint32_t timp_timer_1 = my_timer_get_value(MY_TIMER_1, 1);
-        printk("TIMER1: %u\n", timp_timer_1);
-        
-        k_msleep(500);
+		if (my_rtc_get_compare_event(2, 1)) {
+			printk("Tick happened\n");
+			my_rtc_clear_compare_event(2, 1);
+			
+			uint32_t next_compare = (my_rtc_get_value(2) + 50000) & 0x00FFFFFF;
+			my_rtc_start_compare(2, 1, next_compare);
+		}
     }
+
 }

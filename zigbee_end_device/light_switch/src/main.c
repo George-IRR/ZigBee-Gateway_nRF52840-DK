@@ -794,6 +794,21 @@ void set_tx_power(void)
 
 #include <my_nrf52_timer.h>
 #include <my_rtc.h>
+#include <zephyr/irq.h>
+
+static void rtc2_isr(const void *arg)
+{
+	ARG_UNUSED(arg);
+
+	if (my_rtc_get_compare_event(2, 1)) {
+		printk("Tick happened in Interrupt!\n");
+		my_rtc_clear_compare_event(2, 1);
+		
+		// Clear counter to make it periodic (4-second interval)
+		my_rtc_clear(2);
+		my_rtc_start_compare(2, 1, 32);
+	}
+}
 
 int main(void)
 {
@@ -855,19 +870,21 @@ int main(void)
     my_timer_init(MY_TIMER_1, 4);
     my_timer_start(MY_TIMER_1);
 
-	my_rtc_init(2, 4095); //125 ms / tick
-	my_rtc_start_compare(2,1,32);
+	my_rtc_init(2, 4095); // 125 ms / tick
+	my_rtc_start_compare(2, 1, 32); // 32 ticks = 4 seconds
+
+	my_rtc_enable_interrupt(2, MY_RTC_INT_COMPARE1_MASK);
+
+	// Enable the RTC2 interrupt in the NVIC
+	IRQ_CONNECT(RTC2_IRQn, 2, rtc2_isr, NULL, 0);
+	irq_enable(RTC2_IRQn);
+
 	my_rtc_start(2);
 	k_msleep(10);
 
     while (1) {
-		if (my_rtc_get_compare_event(2, 1)) 
-		{
-			printk("Tick happened\n");
-			my_rtc_clear_compare_event(2, 1);
-			my_rtc_clear(2);
-			my_rtc_start_compare(2,1,32);
-		}
+		//k_msleep(1000);
+		k_sleep(K_FOREVER);
     }
 
 }

@@ -23,6 +23,9 @@
 #include "zb_mem_config_custom.h"
 #include "zb_dimmer_switch.h"
 #include "bmp_180.h"
+#include "my_nrf52_timer.h"
+#include "my_rtc.h"
+#include <zephyr/irq.h>
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 #include <osif/mac_platform.h>
@@ -792,27 +795,43 @@ void set_tx_power(void)
 
 #endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
-#include <my_nrf52_timer.h>
-#include <my_rtc.h>
-#include <zephyr/irq.h>
+static struct k_work rtc_work;
+
+static void zb_trigger_temp_report(zb_bufid_t param)
+{
+	ARG_UNUSED(param);
+	zb_ret_t err = zb_buf_get_out_delayed(send_temperature_cb);
+	if (err != RET_OK) {
+		LOG_ERR("Failed to allocate ZBOSS buffer for temp report (err %d)", err);
+	}
+}
+
+static void rtc_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	ZB_SCHEDULE_APP_CALLBACK(zb_trigger_temp_report, 0);
+}
 
 static void rtc2_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
 
 	if (my_rtc_get_compare_event(2, 1)) {
-		printk("Tick happened in Interrupt!\n");
 		my_rtc_clear_compare_event(2, 1);
 		
 		// Clear counter to make it periodic (4-second interval)
 		my_rtc_clear(2);
 		my_rtc_start_compare(2, 1, 32);
+
+		// Defer processing to Zephyr workqueue
+		k_work_submit(&rtc_work);
 	}
 }
 
 int main(void)
 {
 	LOG_INF("Starting ZBOSS Light Switch example");
+
 
 	/* Initialize. */
 	configure_gpio();
@@ -869,6 +888,9 @@ int main(void)
 
     my_timer_init(MY_TIMER_1, 4);
     my_timer_start(MY_TIMER_1);
+
+	// Initialize the Zephyr work item for RTC handling
+	k_work_init(&rtc_work, rtc_work_handler);
 
 	my_rtc_init(2, 4095); // 125 ms / tick
 	my_rtc_start_compare(2, 1, 32); // 32 ticks = 4 seconds

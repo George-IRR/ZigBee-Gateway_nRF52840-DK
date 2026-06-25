@@ -3,6 +3,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
+#include <errno.h>
 
 LOG_MODULE_REGISTER(bmp180, LOG_LEVEL_INF);
 
@@ -24,6 +25,7 @@ typedef struct {
 
 static const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
 static bmp180_calib_t calib_data;
+static bool is_calibrated = false;
 
 int bmp180_init(void)
 {
@@ -55,6 +57,7 @@ int bmp180_init(void)
     calib_data.md  = (calib_read[20] << 8) | calib_read[21];
     
     LOG_INF("BMP180 Calibration Data Loaded Successfully.");
+    is_calibrated = true;
     return 0;
 }
 
@@ -63,6 +66,14 @@ int bmp180_read_temperature(int32_t *temp_out)
 {
     if (temp_out == NULL) {
         return -EINVAL; 
+    }
+
+    if (!is_calibrated) {
+        LOG_INF("BMP180 not calibrated. Retrying calibration initialization...");
+        int init_ret = bmp180_init();
+        if (init_ret < 0) {
+            return init_ret;
+        }
     }
 
     if (!device_is_ready(i2c_dev)) {
@@ -95,7 +106,13 @@ int bmp180_read_temperature(int32_t *temp_out)
 
     int32_t X1, X2, B5, T;
     X1 = (UT - (int32_t)calib_data.ac6) * (int32_t)calib_data.ac5 / (1 << 15);
-    X2 = ((int32_t)calib_data.mc * (1 << 11)) / (X1 + (int32_t)calib_data.md);
+    
+    int32_t divisor = X1 + (int32_t)calib_data.md;
+    if (divisor == 0) {
+        LOG_ERR("BMP180 division by zero (X1 + md = 0)!");
+        return -EDOM;
+    }
+    X2 = ((int32_t)calib_data.mc * (1 << 11)) / divisor;
     B5 = X1 + X2;
     T = (B5 + 8) / (1 << 4);
 

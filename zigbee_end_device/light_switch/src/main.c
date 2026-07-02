@@ -11,6 +11,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
 #include <dk_buttons_and_leds.h>
 #include <ram_pwrdn.h>
 
@@ -21,36 +22,14 @@
 #include <zb_nrf_platform.h>
 #include "zb_mem_config_custom.h"
 #include "zb_dimmer_switch.h"
+#include "bmp_180.h"
+#include "my_nrf52_timer.h"
+#include "my_rtc.h"
+#include <zephyr/irq.h>
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 #include <osif/mac_platform.h>
 #endif
-
-#if CONFIG_ZIGBEE_FOTA
-#include <zigbee/zigbee_fota.h>
-#include <zephyr/sys/reboot.h>
-#include <zephyr/dfu/mcuboot.h>
-
-/* LED indicating OTA Client Activity. */
-#define OTA_ACTIVITY_LED          DK_LED2
-#endif /* CONFIG_ZIGBEE_FOTA */
-
-#if CONFIG_BT_NUS
-#include "nus_cmd.h"
-
-/* LED which indicates that Central is connected. */
-#define NUS_STATUS_LED            DK_LED1
-/* UART command that will turn on found light bulb(s). */
-#define COMMAND_ON                "n"
-/**< UART command that will turn off found light bulb(s). */
-#define COMMAND_OFF               "f"
-/**< UART command that will turn toggle found light bulb(s). */
-#define COMMAND_TOGGLE            "t"
-/**< UART command that will increase brightness of found light bulb(s). */
-#define COMMAND_INCREASE          "i"
-/**< UART command that will decrease brightness of found light bulb(s). */
-#define COMMAND_DECREASE          "d"
-#endif /* CONFIG_BT_NUS */
 
 /* Source endpoint used to control light bulb. */
 #define LIGHT_SWITCH_ENDPOINT      1
@@ -65,7 +44,7 @@
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
  * for all network devices before running other samples.
  */
-#define ERASE_PERSISTENT_CONFIG    ZB_FALSE
+#define ERASE_PERSISTENT_CONFIG    ZB_TRUE
 /* LED indicating that light switch successfully joind Zigbee network. */
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
 /* LED used for device identification. */
@@ -155,39 +134,108 @@ ZB_ZCL_DECLARE_ON_OFF_CLIENT_ATTRIB_LIST(
 ZB_ZCL_DECLARE_LEVEL_CONTROL_CLIENT_ATTRIB_LIST(
 	level_control_client_attr_list);
 
-/* Declare cluster list for Dimmer Switch device. */
-ZB_DECLARE_DIMMER_SWITCH_CLUSTER_LIST(
-	dimmer_switch_clusters,
-	basic_server_attr_list,
-	identify_client_attr_list,
-	identify_server_attr_list,
-	scenes_client_attr_list,
-	groups_client_attr_list,
-	on_off_client_attr_list,
-	level_control_client_attr_list);
+/* Custom cluster list for Dimmer Switch device containing Temp Measurement client cluster */
+zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
+{
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_ARRAY_SIZE(basic_server_attr_list, zb_zcl_attr_t),
+		(basic_server_attr_list),
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_ARRAY_SIZE(identify_server_attr_list, zb_zcl_attr_t),
+		(identify_server_attr_list),
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_ARRAY_SIZE(identify_client_attr_list, zb_zcl_attr_t),
+		(identify_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_SCENES,
+		ZB_ZCL_ARRAY_SIZE(scenes_client_attr_list, zb_zcl_attr_t),
+		(scenes_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_GROUPS,
+		ZB_ZCL_ARRAY_SIZE(groups_client_attr_list, zb_zcl_attr_t),
+		(groups_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_ARRAY_SIZE(on_off_client_attr_list, zb_zcl_attr_t),
+		(on_off_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
+		ZB_ZCL_ARRAY_SIZE(level_control_client_attr_list, zb_zcl_attr_t),
+		(level_control_client_attr_list),
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+		0,
+		NULL,
+		ZB_ZCL_CLUSTER_CLIENT_ROLE,
+		ZB_ZCL_MANUF_CODE_INVALID
+	)
+};
 
-/* Declare endpoint for Dimmer Switch device. */
-ZB_DECLARE_DIMMER_SWITCH_EP(
+/* Custom simple descriptor for Dimmer Switch with 2 IN and 6 OUT clusters */
+ZB_DECLARE_SIMPLE_DESC(2, 6);
+static ZB_AF_SIMPLE_DESC_TYPE(2, 6) simple_desc_dimmer_switch_ep =
+{
+	LIGHT_SWITCH_ENDPOINT,
+	ZB_AF_HA_PROFILE_ID,
+	ZB_DIMMER_SWITCH_DEVICE_ID,
+	ZB_DEVICE_VER_DIMMER_SWITCH,
+	0,
+	2,
+	6,
+	{
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_CLUSTER_ID_SCENES,
+		ZB_ZCL_CLUSTER_ID_GROUPS,
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT
+	}
+};
+
+/* Bind custom cluster list to Endpoint */
+ZB_AF_DECLARE_ENDPOINT_DESC(
 	dimmer_switch_ep,
 	LIGHT_SWITCH_ENDPOINT,
-	dimmer_switch_clusters);
+	ZB_AF_HA_PROFILE_ID,
+	0,
+	NULL,
+	ZB_ZCL_ARRAY_SIZE(dimmer_switch_clusters, zb_zcl_cluster_desc_t),
+	dimmer_switch_clusters,
+	(zb_af_simple_desc_1_1_t *)&simple_desc_dimmer_switch_ep,
+	0, NULL,
+	0, NULL
+);
 
 /* Declare application's device context (list of registered endpoints)
  * for Dimmer Switch device.
  */
-#ifndef CONFIG_ZIGBEE_FOTA
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(dimmer_switch_ctx, dimmer_switch_ep);
-#else
-
-  #if LIGHT_SWITCH_ENDPOINT == CONFIG_ZIGBEE_FOTA_ENDPOINT
-    #error "Light switch and Zigbee OTA endpoints should be different."
-  #endif
-
-extern zb_af_endpoint_desc_t zigbee_fota_client_ep;
-ZBOSS_DECLARE_DEVICE_CTX_2_EP(dimmer_switch_ctx,
-			      zigbee_fota_client_ep,
-			      dimmer_switch_ep);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /* Forward declarations. */
 static void light_switch_button_handler(struct k_timer *timer);
@@ -227,6 +275,53 @@ static void start_identifying(zb_bufid_t bufid)
 	} else {
 		LOG_WRN("Device not in a network - cannot enter identify mode");
 	}
+}
+
+static void write_attr_callback(zb_bufid_t bufid)
+{
+	zb_zcl_command_send_status_t *send_status = ZB_BUF_GET_PARAM(bufid, zb_zcl_command_send_status_t);
+	if (send_status->status == RET_OK) {
+		LOG_INF("Write attribute request sent successfully!");
+	} else {
+		LOG_ERR("Write attribute request failed to send: %d", send_status->status);
+	}
+	zb_buf_free(bufid);
+}
+
+static void send_temperature_cb(zb_bufid_t bufid)
+{
+    int32_t temp_raw;
+    int err = bmp180_read_temperature(&temp_raw);
+
+    if (err != 0) {
+        LOG_ERR("Failed to read BMP180: %d", err);
+        zb_buf_free(bufid);
+        return;
+    }
+
+    zb_int16_t temp_zigbee = (zb_int16_t)(temp_raw);
+    zb_uint8_t *ptr;
+
+    ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+
+    ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
+        ptr,
+        ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
+        ZB_ZCL_ATTR_TYPE_S16,
+        (zb_uint8_t *)&temp_zigbee);
+    
+    zb_uint16_t coord_addr = 0x0000;
+	
+    ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
+        bufid,
+        ptr,
+        coord_addr,
+        ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
+        10, /* ZIGBEE_COORDINATOR_ENDPOINT */
+        LIGHT_SWITCH_ENDPOINT,
+        ZB_AF_HA_PROFILE_ID,
+        ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+        write_attr_callback);
 }
 
 /**@brief Callback for button events.
@@ -302,6 +397,12 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 			zb_err_code = zb_buf_get_out_delayed_ext(
 				light_switch_send_on_off, cmd_id, 0);
 			ZB_ERROR_CHECK(zb_err_code);
+
+			/* Queue custom random string transmission */
+			zb_ret_t rand_err = zb_buf_get_out_delayed(send_temperature_cb);
+			if (rand_err != RET_OK) {
+				LOG_ERR("Failed to queue random string transmission (err %d)", rand_err);
+			}
 		}
 		break;
 	default:
@@ -549,63 +650,7 @@ static void light_switch_button_handler(struct k_timer *timer)
 	}
 }
 
-#ifdef CONFIG_ZIGBEE_FOTA
-static void confirm_image(void)
-{
-	if (!boot_is_img_confirmed()) {
-		int ret = boot_write_img_confirmed();
 
-		if (ret) {
-			LOG_ERR("Couldn't confirm image: %d", ret);
-		} else {
-			LOG_INF("Marked image as OK");
-		}
-	}
-}
-
-static void ota_evt_handler(const struct zigbee_fota_evt *evt)
-{
-	switch (evt->id) {
-	case ZIGBEE_FOTA_EVT_PROGRESS:
-		dk_set_led(OTA_ACTIVITY_LED, evt->dl.progress % 2);
-		break;
-
-	case ZIGBEE_FOTA_EVT_FINISHED:
-		LOG_INF("Reboot application.");
-		/* Power on unused sections of RAM to allow MCUboot to use it. */
-		if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
-			power_up_unused_ram();
-		}
-
-		sys_reboot(SYS_REBOOT_COLD);
-		break;
-
-	case ZIGBEE_FOTA_EVT_ERROR:
-		LOG_ERR("OTA image transfer failed.");
-		break;
-
-	default:
-		break;
-	}
-}
-
-/**@brief Callback function for handling ZCL commands.
- *
- * @param[in]   bufid   Reference to Zigbee stack buffer
- *                      used to pass received data.
- */
-static void zcl_device_cb(zb_bufid_t bufid)
-{
-	zb_zcl_device_callback_param_t *device_cb_param =
-		ZB_BUF_GET_PARAM(bufid, zb_zcl_device_callback_param_t);
-
-	if (device_cb_param->device_cb_id == ZB_ZCL_OTA_UPGRADE_VALUE_CB_ID) {
-		zigbee_fota_zcl_cb(bufid);
-	} else {
-		device_cb_param->status = RET_NOT_IMPLEMENTED;
-	}
-}
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /**@brief Zigbee stack event handler.
  *
@@ -621,10 +666,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	/* Update network status LED. */
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Pass signal to the OTA client implementation. */
-	zigbee_fota_signal_handler(bufid);
-#endif /* CONFIG_ZIGBEE_FOTA */
+
 
 	switch (sig) {
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
@@ -633,12 +675,16 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		if (status == RET_OK) {
-			/* Check the light device address. */
+			/* Comment out or delete this block to keep static addressing intact */
+			/*
 			if (bulb_ctx.short_addr == 0xFFFF) {
 				k_timer_start(&bulb_ctx.find_alarm,
 					      MATCH_DESC_REQ_START_DELAY,
 					      MATCH_DESC_REQ_TIMEOUT);
 			}
+			*/
+			LOG_INF("Static addressing to coordinator initialized.");
+			dk_set_led_on(BULB_FOUND_LED);
 		}
 		break;
 	case ZB_ZDO_SIGNAL_LEAVE:
@@ -665,66 +711,6 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		zb_buf_free(bufid);
 	}
 }
-
-#if CONFIG_BT_NUS
-
-static void turn_on_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_ON_ID, 0);
-}
-
-static void turn_off_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_OFF_ID, 0);
-}
-
-static void toggle_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_TOGGLE_ID, 0);
-}
-
-static void increase_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP, 0);
-}
-
-static void decrease_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN, 0);
-}
-
-static void on_nus_connect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_on(NUS_STATUS_LED);
-}
-
-static void on_nus_disconnect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_off(NUS_STATUS_LED);
-}
-
-static struct nus_entry commands[] = {
-	NUS_COMMAND(COMMAND_ON, turn_on_cmd),
-	NUS_COMMAND(COMMAND_OFF, turn_off_cmd),
-	NUS_COMMAND(COMMAND_TOGGLE, toggle_cmd),
-	NUS_COMMAND(COMMAND_INCREASE, increase_cmd),
-	NUS_COMMAND(COMMAND_DECREASE, decrease_cmd),
-	NUS_COMMAND(NULL, NULL),
-};
-
-#endif /* CONFIG_BT_NUS */
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 
@@ -809,47 +795,81 @@ void set_tx_power(void)
 
 #endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
+static struct k_work rtc_work;
+
+static void zb_trigger_temp_report(zb_bufid_t param)
+{
+	ARG_UNUSED(param);
+	zb_ret_t err = zb_buf_get_out_delayed(send_temperature_cb);
+	if (err != RET_OK) {
+		LOG_ERR("Failed to allocate ZBOSS buffer for temp report (err %d)", err);
+	}
+}
+
+static void rtc_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	ZB_SCHEDULE_APP_CALLBACK(zb_trigger_temp_report, 0);
+}
+
+static void rtc2_isr(const void *arg)
+{
+	ARG_UNUSED(arg);
+	bool is_compare_event = false;
+
+	int err = my_rtc_get_compare_event(2, 1, &is_compare_event);
+	
+	if (err == 0 && is_compare_event) {
+		my_rtc_clear_compare_event(2, 1);
+		
+		// clear counter to make it periodic (4-second interval)
+		my_rtc_clear(2);
+		my_rtc_start_compare(2, 1, 32);
+
+		// Zephyr workqueue
+		k_work_submit(&rtc_work);
+	}
+}
+
 int main(void)
 {
 	LOG_INF("Starting ZBOSS Light Switch example");
+
 
 	/* Initialize. */
 	configure_gpio();
 	alarm_timers_init();
 	register_factory_reset_button(FACTORY_RESET_BUTTON);
+	
+	bmp180_init();
+    
 
 	zigbee_erase_persistent_storage(ERASE_PERSISTENT_CONFIG);
 	zb_set_ed_timeout(ED_AGING_TIMEOUT_64MIN);
 	zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(3000));
 
-	/* Set default bulb short_addr. */
-	bulb_ctx.short_addr = 0xFFFF;
+	/* Set default bulb short_addr directly to the Coordinator */
+	bulb_ctx.short_addr = 0x0000;
+	bulb_ctx.endpoint = 10; /* Must match ZIGBEE_COORDINATOR_ENDPOINT of coordinator */
+
+	/* Disable the match descriptor discovery timer to avoid overwriting addresses */
+	// k_timer_start(&bulb_ctx.find_alarm, MATCH_DESC_REQ_START_DELAY, MATCH_DESC_REQ_TIMEOUT);
 
 	/* If "sleepy button" is defined, check its state during Zigbee
 	 * initialization and enable sleepy behavior at device if defined button
 	 * is pressed.
 	 */
-#if defined BUTTON_SLEEPY
+	
+	#if defined BUTTON_SLEEPY
 	if (dk_get_buttons() & BUTTON_SLEEPY) {
 		zigbee_configure_sleepy_behavior(true);
 	}
-#endif
+	#endif
 
 	/* Power off unused sections of RAM to lower device power consumption. */
 	if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
 		power_down_unused_ram();
 	}
-
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Initialize Zigbee FOTA download service. */
-	zigbee_fota_init(ota_evt_handler);
-
-	/* Mark the current firmware as valid. */
-	confirm_image();
-
-	/* Register callback for handling ZCL commands. */
-	ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 	/* Register dimmer switch device context (endpoints). */
 	ZB_AF_REGISTER_DEVICE_CTX(&dimmer_switch_ctx);
@@ -858,25 +878,48 @@ int main(void)
 
 	/* Register handlers to identify notifications */
 	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(LIGHT_SWITCH_ENDPOINT, identify_cb);
-#ifdef CONFIG_ZIGBEE_FOTA
-	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(CONFIG_ZIGBEE_FOTA_ENDPOINT, identify_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
-#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
-	set_tx_power();
-#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
+
+	#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
+		set_tx_power();
+	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 
-#if CONFIG_BT_NUS
-	/* Initialize NUS command service. */
-	nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
-#endif /* CONFIG_BT_NUS */
-
 	LOG_INF("ZBOSS Light Switch example started");
+
+	if (my_timer_init(MY_TIMER_1, 4) != 0) {
+		LOG_ERR("Failed to initialize TIMER1");
+	}
+	if (my_timer_start(MY_TIMER_1) != 0) {
+		LOG_ERR("Failed to start TIMER1");
+	}
+
+	k_work_init(&rtc_work, rtc_work_handler);
+
+	if (my_rtc_init(2, 4095) != 0) { // 125 ms / tick
+		LOG_ERR("Failed to initialize RTC2");
+	}
+	if (my_rtc_start_compare(2, 1, 32) != 0) { // 32 ticks = 4 seconds
+		LOG_ERR("Failed to set RTC2 compare value");
+	}
+	if (my_rtc_enable_interrupt(2, MY_RTC_INT_COMPARE1_MASK) != 0) {
+		LOG_ERR("Failed to enable RTC2 interrupt mask");
+	}
+
+	// Enable the RTC2 interrupt in the NVIC
+	IRQ_CONNECT(RTC2_IRQn, 2, rtc2_isr, NULL, 0);
+	irq_enable(RTC2_IRQn);
+
+	if (my_rtc_start(2) != 0) {
+		LOG_ERR("Failed to start RTC2");
+	}
+	
+	k_msleep(10);
 
 	while (1) {
 		k_sleep(K_FOREVER);
 	}
+
 }

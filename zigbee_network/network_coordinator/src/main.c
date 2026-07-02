@@ -5,7 +5,7 @@
  */
 
 /** @file
- *  @brief Simple Zigbee network coordinator implementation
+ * @brief Simple Zigbee network coordinator implementation
  */
 
 #include <zephyr/kernel.h>
@@ -14,12 +14,14 @@
 #include <dk_buttons_and_leds.h>
 
 #include <zboss_api.h>
+#include <zboss_api_addons.h>
 #include <zb_mem_config_max.h>
 #include <zigbee/zigbee_error_handler.h>
 #include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
-#include "zb_range_extender.h"
 
+// BMP180
+#include <stdlib.h>
 
 #define RUN_STATUS_LED                         DK_LED1
 #define RUN_LED_BLINK_INTERVAL                 1000
@@ -62,43 +64,151 @@ LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
  * Stores all settings and static values.
  */
 struct zb_device_ctx {
-	zb_zcl_basic_attrs_t basic_attr;
+	zb_zcl_basic_attrs_ext_t basic_attr;
 	zb_zcl_identify_attrs_t identify_attr;
 };
 
 /* Zigbee device application context storage. */
 static struct zb_device_ctx dev_ctx;
 
+/* Declare attributes for the newly added On/Off Server Cluster */
+static zb_uint8_t on_off_attr_value = ZB_ZCL_ON_OFF_ON_OFF_DEFAULT_VALUE;
+ZB_ZCL_DECLARE_ON_OFF_ATTRIB_LIST(
+	on_off_attr_list, 
+	&on_off_attr_value);
+
 ZB_ZCL_DECLARE_IDENTIFY_ATTRIB_LIST(
 	identify_attr_list,
 	&dev_ctx.identify_attr.identify_time);
 
-ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST(
+ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST_EXT(
 	basic_attr_list,
 	&dev_ctx.basic_attr.zcl_version,
-	&dev_ctx.basic_attr.power_source);
+	&dev_ctx.basic_attr.app_version,
+	&dev_ctx.basic_attr.stack_version,
+	&dev_ctx.basic_attr.hw_version,
+	dev_ctx.basic_attr.mf_name,
+	dev_ctx.basic_attr.model_id,
+	dev_ctx.basic_attr.date_code,
+	&dev_ctx.basic_attr.power_source,
+	dev_ctx.basic_attr.location_id,
+	&dev_ctx.basic_attr.ph_env,
+	dev_ctx.basic_attr.sw_ver);
 
-ZB_DECLARE_RANGE_EXTENDER_CLUSTER_LIST(
-	nwk_coordinator_clusters,
-	basic_attr_list,
-	identify_attr_list);
+static zb_int16_t temp_meas_value = 0;
+static zb_int16_t temp_meas_min = -5000;  // -50.00 C
+static zb_int16_t temp_meas_max = 10000; // 100.00 C
+static zb_uint16_t temp_meas_tolerance = 0;
 
-ZB_DECLARE_RANGE_EXTENDER_EP(
+ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(temp_measurement_attr_list, ZB_ZCL_TEMP_MEASUREMENT)
+  ZB_ZCL_SET_ATTR_DESC_M(ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, &temp_meas_value, ZB_ZCL_ATTR_TYPE_S16, ZB_ZCL_ATTR_ACCESS_READ_WRITE | ZB_ZCL_ATTR_ACCESS_REPORTING)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_MIN_VALUE_ID, &temp_meas_min)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_MAX_VALUE_ID, &temp_meas_max)
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_TEMP_MEASUREMENT_TOLERANCE_ID, &temp_meas_tolerance)
+ZB_ZCL_FINISH_DECLARE_ATTRIB_LIST;
+
+/* Construct a custom cluster array explicitly declaring Basic, Identify, and On/Off Server support */
+static zb_zcl_cluster_desc_t nwk_coordinator_clusters[] = {
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_ARRAY_SIZE(basic_attr_list, zb_zcl_attr_t),
+		basic_attr_list,
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		0
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_ARRAY_SIZE(identify_attr_list, zb_zcl_attr_t),
+		identify_attr_list,
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		0
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_ARRAY_SIZE(on_off_attr_list, zb_zcl_attr_t),
+		on_off_attr_list,
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		0
+	),
+	ZB_ZCL_CLUSTER_DESC(
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+		ZB_ZCL_ARRAY_SIZE(temp_measurement_attr_list, zb_zcl_attr_t),
+		temp_measurement_attr_list,
+		ZB_ZCL_CLUSTER_SERVER_ROLE,
+		0
+	)
+};
+
+/* Declare simple descriptor structure space for 4 input clusters and 0 output clusters */
+ZB_DECLARE_SIMPLE_DESC(4, 0);
+
+static ZB_AF_SIMPLE_DESC_TYPE(4, 0) simple_desc_nwk_coordinator_ep = {
+	ZIGBEE_COORDINATOR_ENDPOINT,
+	ZB_AF_HA_PROFILE_ID,
+	0, /* Application Device ID */
+	0, /* Application Device Version */
+	0, /* Reserved flags */
+	4, /* 4 input clusters*/
+	0, /* Output cluster count */
+	{
+		ZB_ZCL_CLUSTER_ID_BASIC,
+		ZB_ZCL_CLUSTER_ID_IDENTIFY,
+		ZB_ZCL_CLUSTER_ID_ON_OFF,
+		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT
+	}
+};
+
+/* Bind the custom cluster array to Endpoint 10 using full endpoint descriptor macro rules */
+ZB_AF_DECLARE_ENDPOINT_DESC(
 	nwk_coordinator_ep,
 	ZIGBEE_COORDINATOR_ENDPOINT,
-	nwk_coordinator_clusters);
+	ZB_AF_HA_PROFILE_ID,
+	0, NULL,
+	ZB_ZCL_ARRAY_SIZE(nwk_coordinator_clusters, zb_zcl_cluster_desc_t),
+	nwk_coordinator_clusters,
+	(zb_af_simple_desc_1_1_t*)&simple_desc_nwk_coordinator_ep, 
+	0, NULL,
+	0, NULL 
+);
 
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(
 	nwk_coordinator,
 	nwk_coordinator_ep);
-
 
 /**@brief Function for initializing all clusters attributes. */
 static void app_clusters_attr_init(void)
 {
 	/* Basic cluster attributes data. */
 	dev_ctx.basic_attr.zcl_version = ZB_ZCL_VERSION;
+	dev_ctx.basic_attr.app_version = 0;
+	dev_ctx.basic_attr.stack_version = 0;
+	dev_ctx.basic_attr.hw_version = 0;
 	dev_ctx.basic_attr.power_source = COORDINATOR_INIT_BASIC_POWER_SOURCE;
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.mf_name,
+		"Nordic",
+		ZB_ZCL_STRING_CONST_SIZE("Nordic"));
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.model_id,
+		"Coordinator",
+		ZB_ZCL_STRING_CONST_SIZE("Coordinator"));
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.date_code,
+		"20200329",
+		ZB_ZCL_STRING_CONST_SIZE("20200329"));
+
+	/* Initialize location_id as empty Pascal string */
+	dev_ctx.basic_attr.location_id[0] = 0;
+
+	dev_ctx.basic_attr.ph_env = 0;
+
+	ZB_ZCL_SET_STRING_VAL(
+		dev_ctx.basic_attr.sw_ver,
+		"",
+		0);
 
 	/* Identify cluster attributes data. */
 	dev_ctx.identify_attr.identify_time = ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE;
@@ -240,6 +350,42 @@ static void configure_gpio(void)
 	}
 }
 
+
+static void zcl_device_cb(zb_bufid_t bufid)
+{
+	zb_zcl_device_callback_param_t *device_cb_param =
+		ZB_BUF_GET_PARAM(bufid, zb_zcl_device_callback_param_t);
+
+	if (device_cb_param->device_cb_id == ZB_ZCL_SET_ATTR_VALUE_CB_ID) {
+		zb_zcl_set_attr_value_param_t *cb_param = &(device_cb_param->cb_param.set_attr_value_param);
+		
+		// ON OFF Switch LOGIC
+		if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_ON_OFF &&
+		    cb_param->attr_id == ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID) {
+			
+			zb_uint8_t value = cb_param->values.data8;
+			LOG_INF("Data packet received via attribute update! Value: %d", value);
+			if (value == 1) {
+				LOG_INF("Command parsed: Turn ON");
+			} else {
+				LOG_INF("Command parsed: Turn OFF");
+			}
+		} 
+		
+		else if (cb_param->cluster_id == ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT &&
+		         cb_param->attr_id == ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID) {
+
+			zb_int16_t temperature_raw = (zb_int16_t)cb_param->values.data16;
+
+			LOG_INF("zcl_device_cb - Temperature: %d.%d C (Raw value: %d)", 
+			        temperature_raw / 10, 
+			        abs(temperature_raw % 10), 
+			        temperature_raw);
+		}
+	}
+	device_cb_param->status = RET_OK;
+}
+
 /**@brief Zigbee stack event handler.
  *
  * @param[in]   bufid   Reference to the Zigbee stack buffer used to pass signal.
@@ -255,11 +401,17 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	zb_time_t timeout_bi;
 
 	switch (sig) {
+	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
+		if (status == RET_OK) {
+			LOG_INF("Device started for the first time. Instantiating network formation...");
+			comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_FORMATION);
+			ZB_COMM_STATUS_CHECK(comm_status);
+		} else {
+			LOG_ERR("Failed to initialize Zigbee stack on first start (status: %d)", status);
+		}
+		break;
+
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
-		/* BDB initialization completed after device reboot,
-		 * use NVRAM contents during initialization.
-		 * Device joined/rejoined and started.
-		 */
 		if (status == RET_OK) {
 			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
 				LOG_INF("Start network steering");
@@ -270,8 +422,22 @@ void zboss_signal_handler(zb_bufid_t bufid)
 				LOG_INF("Coordinator restarted successfully");
 			}
 		} else {
-			LOG_ERR("Failed to initialize Zigbee stack using NVRAM data (status: %d)",
-				status);
+			LOG_WRN("NVRAM empty or invalid (status: %d). Forcing clean network formation...", status);
+			comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_FORMATION);
+			ZB_COMM_STATUS_CHECK(comm_status);
+		}
+		break;
+
+	case ZB_BDB_SIGNAL_FORMATION:
+		if (status == RET_OK) {
+			LOG_INF("Network formed successfully");
+			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
+				LOG_INF("Starting top level network steering...");
+				comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+				ZB_COMM_STATUS_CHECK(comm_status);
+			}
+		} else {
+			LOG_ERR("Zigbee network formation failed (status: %d)", status);
 		}
 		break;
 
@@ -282,8 +448,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 				zb_bdb_set_legacy_device_support(1);
 			}
 
-			/* Schedule an alarm to notify about the end of steering period.
-			 */
+			/* Schedule an alarm to notify about the end of steering period. */
 			LOG_INF("Network steering started");
 			zb_err_code = ZB_SCHEDULE_APP_ALARM(
 				steering_finished, 0,
@@ -313,7 +478,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	} break;
 
 	default:
-		/* Call default signal handler. */
+		/* Call default signal handler for standard stack processing */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		break;
 	}
@@ -327,12 +492,34 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		dk_set_led_off(ZIGBEE_NETWORK_STATE_LED);
 	}
 
-	/*
-	 * All callbacks should either reuse or free passed buffers.
-	 * If bufid == 0, the buffer is invalid (not passed).
-	 */
 	if (bufid) {
 		zb_buf_free(bufid);
+	}
+}
+
+static void modify_attr_value_callback(zb_uint8_t ep, zb_uint16_t cluster_id, zb_uint16_t attr_id, zb_uint8_t *value)
+{
+	if (cluster_id == ZB_ZCL_CLUSTER_ID_BASIC &&
+	    attr_id == ZB_ZCL_ATTR_BASIC_LOCATION_DESCRIPTION_ID) {
+		
+		zb_uint8_t len = value[0];
+		if (len > 32) {
+			len = 32;
+		}
+		
+		static char print_buf[33];
+		memcpy(print_buf, &value[1], len);
+		print_buf[len] = '\0';
+		
+		LOG_INF("Received custom random string payload: %s (length: %d)", print_buf, len);
+	} else if (cluster_id == ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT &&
+	           attr_id == ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID) {
+		
+		zb_int16_t temperature_raw = *(zb_int16_t *)value;
+		LOG_INF("modify_attr_value_callback - Temperature: %d.%d C (Raw value: %d)", 
+		        temperature_raw / 10, 
+		        abs(temperature_raw % 10), 
+		        temperature_raw);
 	}
 }
 
@@ -353,6 +540,12 @@ int main(void)
 
 	/* Register handlers to identify notifications. */
 	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(ZIGBEE_COORDINATOR_ENDPOINT, identify_cb);
+
+	/* Add this line to handle incoming validated ZCL commands */
+	ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
+
+	/* Set modify attribute callback to capture Write Attribute commands */
+	ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB(modify_attr_value_callback);
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

@@ -2,10 +2,8 @@
     "nrf-connect.applications": [
         "${workspaceFolder}/end_device_nrf",
         "${workspaceFolder}/zigbee_end_device/light_switch",
-        "${workspaceFolder}/zigbee_end_device/light_bulb",
-        "${workspaceFolder}/zigbee_network/shell",
-        "${workspaceFolder}/zigbee_network/network_coordinator",
-        "${workspaceFolder}/zigbee_end_device/bmp180"
+        "${workspaceFolder}/zigbee_end_device/bmp180",
+        "${workspaceFolder}/zigbee_network/network_coordinator"
     ],
     "nrf-connect.debugging.bindings": {
         "${workspaceFolder}/zigbee_end_device/bmp180/build/bmp180": "Launch bmp180/build/bmp180"

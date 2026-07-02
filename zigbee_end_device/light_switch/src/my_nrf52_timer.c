@@ -1,5 +1,5 @@
 #include "my_nrf52_timer.h"
-#include <zephyr/sys/__assert.h>
+#include <zephyr/sys/__assert.h> 
 #include <stddef.h>
 
 static My_TIMER_Type* get_timer_pointer(my_timer_instance_t timer_idx)
@@ -17,11 +17,11 @@ static My_TIMER_Type* get_timer_pointer(my_timer_instance_t timer_idx)
 void my_timer_init(my_timer_instance_t timer_idx, uint8_t prescaler)
 {
     My_TIMER_Type *timer = get_timer_pointer(timer_idx);
-    __ASSERT(timer != NULL, "Invalid Timer instance!");
+    __ASSERT(timer != NULL, "Timer instance invalid!");
     
     if (timer != ((void*)0)) {
-        timer->BITMODE   = 3;          // 32 bit configuration
-        timer->PRESCALER = prescaler;  
+        timer->BITMODE   = 3;          // 32 bit
+        timer->PRESCALER = prescaler; 
     }
 }
 
@@ -48,8 +48,8 @@ void my_timer_stop(my_timer_instance_t timer_idx)
 uint32_t my_timer_get_value(my_timer_instance_t timer_idx, uint8_t channel)
 {
     My_TIMER_Type *timer = get_timer_pointer(timer_idx);
-    __ASSERT(timer != NULL, "Invalid Timer instance!");
-    __ASSERT(channel <= 5, "Invalid Timer channel! Must be between 0 and 5.");
+    __ASSERT(timer != NULL, "Timer instance invalid!");
+    __ASSERT(channel <= 5, "Canal Timer invalid! Trebuie sa fie intre 0 si 5.");
     
     if (timer == ((void*)0)) {
         return 0;

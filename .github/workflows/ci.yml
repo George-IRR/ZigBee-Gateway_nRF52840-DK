@@ -1,8 +1,6 @@
 name: Embedded CI/CD Pipeline
 
 on:
-  push:
-    branches: [ main, develop, feature/zigbee_network]
   pull_request:
     branches: [ main, develop ]
 

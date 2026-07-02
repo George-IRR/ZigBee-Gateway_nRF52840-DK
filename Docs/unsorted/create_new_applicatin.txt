@@ -1,0 +1,27 @@
+I created a new application.
+I placed `prj.conf` in the correct folder.
+I added the source files.
+I added the include files.
+
+=====================
+
+Now it throws an error:
+`10: fatal error: zb_mem_config_custom.h: No such file or directory`
+`23 | #include "zb_mem_config_custom.h"`
+
+I resolved this by adding:
+`target_include_directories(app PRIVATE include)`
+
+=====================
+
+`#error No crypto suite for Zigbee stack has been selected`
+
+`CONFIG_CRYPTO=y`
+`CONFIG_CRYPTO_NRF_ECB=y`
+`CONFIG_CRYPTO_INIT_PRIORITY=80`
+
+=====================
+Problem:
+Executing task: `nRF Connect: Flash: Configuration has not been built`
+
+I ran a pristine build and now it works.

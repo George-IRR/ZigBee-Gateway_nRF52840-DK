@@ -52,9 +52,9 @@ typedef enum {
     MY_TIMER_4
 } my_timer_instance_t;
 
-void my_timer_init(my_timer_instance_t timer_idx, uint8_t prescaler);
-void my_timer_start(my_timer_instance_t timer_idx);
-void my_timer_stop(my_timer_instance_t timer_idx);
-uint32_t my_timer_get_value(my_timer_instance_t timer_idx, uint8_t channel);
+int my_timer_init(my_timer_instance_t timer_idx, uint8_t prescaler);
+int my_timer_start(my_timer_instance_t timer_idx);
+int my_timer_stop(my_timer_instance_t timer_idx);
+int my_timer_get_value(my_timer_instance_t timer_idx, uint8_t channel, uint32_t *out_value);
 
 #endif // MY_NRF52_TIMER_H

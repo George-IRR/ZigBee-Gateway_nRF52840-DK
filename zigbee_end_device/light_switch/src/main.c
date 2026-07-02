@@ -815,15 +815,18 @@ static void rtc_work_handler(struct k_work *work)
 static void rtc2_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
+	bool is_compare_event = false;
 
-	if (my_rtc_get_compare_event(2, 1)) {
+	int err = my_rtc_get_compare_event(2, 1, &is_compare_event);
+	
+	if (err == 0 && is_compare_event) {
 		my_rtc_clear_compare_event(2, 1);
 		
-		// Clear counter to make it periodic (4-second interval)
+		// clear counter to make it periodic (4-second interval)
 		my_rtc_clear(2);
 		my_rtc_start_compare(2, 1, 32);
 
-		// Defer processing to Zephyr workqueue
+		// Zephyr workqueue
 		k_work_submit(&rtc_work);
 	}
 }
@@ -886,27 +889,37 @@ int main(void)
 
 	LOG_INF("ZBOSS Light Switch example started");
 
-    my_timer_init(MY_TIMER_1, 4);
-    my_timer_start(MY_TIMER_1);
+	if (my_timer_init(MY_TIMER_1, 4) != 0) {
+		LOG_ERR("Failed to initialize TIMER1");
+	}
+	if (my_timer_start(MY_TIMER_1) != 0) {
+		LOG_ERR("Failed to start TIMER1");
+	}
 
-	// Initialize the Zephyr work item for RTC handling
 	k_work_init(&rtc_work, rtc_work_handler);
 
-	my_rtc_init(2, 4095); // 125 ms / tick
-	my_rtc_start_compare(2, 1, 32); // 32 ticks = 4 seconds
-
-	my_rtc_enable_interrupt(2, MY_RTC_INT_COMPARE1_MASK);
+	if (my_rtc_init(2, 4095) != 0) { // 125 ms / tick
+		LOG_ERR("Failed to initialize RTC2");
+	}
+	if (my_rtc_start_compare(2, 1, 32) != 0) { // 32 ticks = 4 seconds
+		LOG_ERR("Failed to set RTC2 compare value");
+	}
+	if (my_rtc_enable_interrupt(2, MY_RTC_INT_COMPARE1_MASK) != 0) {
+		LOG_ERR("Failed to enable RTC2 interrupt mask");
+	}
 
 	// Enable the RTC2 interrupt in the NVIC
 	IRQ_CONNECT(RTC2_IRQn, 2, rtc2_isr, NULL, 0);
 	irq_enable(RTC2_IRQn);
 
-	my_rtc_start(2);
+	if (my_rtc_start(2) != 0) {
+		LOG_ERR("Failed to start RTC2");
+	}
+	
 	k_msleep(10);
 
-    while (1) {
-		//k_msleep(1000);
+	while (1) {
 		k_sleep(K_FOREVER);
-    }
+	}
 
 }

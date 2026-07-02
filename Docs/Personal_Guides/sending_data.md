@@ -5,10 +5,18 @@ When you want to create a blank Zigbee project and send data (like sensor readin
 ---
 
 ### Step 1: Choose Your ZCL Cluster & Role
-In Zigbee, all data is organized into **Clusters** (functional domains) and **Attributes** (individual variables).
+In Zigbee, all data is organized into **Clusters** (functional domains represented by a 16-bit ID, e.g. `0x0402` for Temperature Measurement) and **Attributes** (individual variables within that cluster).
 * **The Coordinator (Server):** Holds the actual attribute database. It runs a **Server Cluster** (e.g. Temperature Measurement Server).
 * **The End Device (Client):** Gathers physical data and wants to send it to the coordinator. It runs a **Client Cluster** (e.g. Temperature Measurement Client).
 * **The Action:** The End Device sends a ZCL `Write Attributes` request over-the-air to overwrite the attribute value on the Coordinator.
+
+> [!IMPORTANT]
+> **What happens if you select the Cluster ID incorrectly?**
+>
+> If you specify the wrong Cluster ID (e.g., using `ZB_ZCL_CLUSTER_ID_ON_OFF` when you intend to send temperature data):
+> 1. **OTA Packet Rejection:** The destination device (Coordinator) filters incoming over-the-air packets. If the destination endpoint does not have the specified Cluster ID registered in its cluster list (as a server), the Zigbee APS/ZCL layer will reject the packet with an error (e.g., `Unsupported Cluster`) and drop it.
+> 2. **Callback Routing Failure:** ZBOSS dispatches attribute updates based on the Cluster ID. The modify callback registered via `ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB` checks the incoming cluster ID. If there is a mismatch, your handler will never be executed.
+> 3. **Service Discovery & Binding Failure:** During BDB commissioning, devices discover compatible endpoints using `Match Descriptor Request` queries matching specific Cluster IDs. If you do not use the correct ID, devices will fail to discover each other's matching clusters and cannot bind.
 
 ---
 
@@ -160,7 +168,68 @@ static void send_data_callback(zb_bufid_t bufid)
         END_DEVICE_ENDPOINT,               // Source Endpoint (1)
         ZB_AF_HA_PROFILE_ID,               // Profile ID
         ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,// Cluster ID
-        NULL                               // Optional callback for transmission status
     );
 }
+```
+
+---
+
+### Step 6: Periodic Data Transmission (The Best Practice)
+If you want to read your sensor and send data periodically (e.g., every 5 seconds), you do **not** need to create a dedicated thread. In fact, creating custom threads consumes valuable stack RAM and introduces **thread-safety issues**, as the ZBOSS stack is not thread-safe and calling ZBOSS APIs from a non-ZBOSS thread will cause heap corruption or crashes.
+
+Instead, use one of the following two recommended options:
+
+#### Option A: ZBOSS App Alarms (Recommended - Easiest & Safest)
+The ZBOSS stack includes its own internal cooperative scheduler. You can schedule a callback to run on the ZBOSS thread after a delay using `ZB_SCHEDULE_APP_ALARM`.
+
+To make it repeat periodically:
+1. Trigger the first alarm during startup (e.g. inside `zb_oss_signal_handler` when the network steering completes).
+2. Reschedule the alarm inside the callback itself.
+
+```c
+static void periodic_sensor_report_cb(zb_bufid_t bufid)
+{
+    // 1. Read sensor value (e.g. read_temperature())
+    // 2. Pack and send ZCL attributes (similar to Step 5)
+    
+    // 3. Reschedule yourself for 5 seconds later
+    ZB_SCHEDULE_APP_ALARM(periodic_sensor_report_cb, 0, ZB_MILLISECONDS_TO_BEACON_INTERVAL(5000));
+}
+```
+
+#### Option B: Zephyr Delayable Work (Best if sensor reading is slow/blocking)
+If your sensor reading takes a long time (e.g. blocking I2C transactions that take 20+ ms), blocking the ZBOSS thread will degrade Zigbee network performance. In this case, use Zephyr's shared **system workqueue**:
+
+1. Define a delayable work item:
+   ```c
+   struct k_work_delayable sensor_work;
+   ```
+2. Implement the work handler (reads the sensor and schedules ZBOSS callback):
+   ```c
+   // This runs on the ZBOSS thread context, making it safe to interact with Zigbee
+   static void zb_send_temp_callback(zb_bufid_t bufid)
+   {
+       zb_int16_t temp = (zb_int16_t)bufid; // Cast parameter back
+       
+       // Pack and send ZCL Write Attribute request...
+   }
+
+   // This runs on the Zephyr system workqueue thread
+   void sensor_work_handler(struct k_work *work)
+   {
+       // 1. Perform blocking read of the sensor
+       int16_t temp_val = read_sensor_blocking();
+       
+       // 2. Safely push the Zigbee transmission onto the ZBOSS thread queue
+       ZB_SCHEDULE_APP_CALLBACK(zb_send_temp_callback, (zb_bufid_t)temp_val);
+       
+       // 3. Reschedule the work item for 5 seconds
+       k_work_reschedule(&sensor_work, K_SECONDS(5));
+   }
+   ```
+3. Initialize the work item during setup:
+   ```c
+   k_work_init_delayable(&sensor_work, sensor_work_handler);
+   k_work_reschedule(&sensor_work, K_SECONDS(5));
+   ```
 ```

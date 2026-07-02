@@ -22,42 +22,14 @@
 #include <zb_nrf_platform.h>
 #include "zb_mem_config_custom.h"
 #include "zb_dimmer_switch.h"
-
-/* FOR BMP180 */
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/sys/printk.h>
+#include "bmp_180.h"
+#include "my_nrf52_timer.h"
+#include "my_rtc.h"
+#include <zephyr/irq.h>
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 #include <osif/mac_platform.h>
 #endif
-
-#if CONFIG_ZIGBEE_FOTA
-#include <zigbee/zigbee_fota.h>
-#include <zephyr/sys/reboot.h>
-#include <zephyr/dfu/mcuboot.h>
-
-/* LED indicating OTA Client Activity. */
-#define OTA_ACTIVITY_LED          DK_LED2
-#endif /* CONFIG_ZIGBEE_FOTA */
-
-#if CONFIG_BT_NUS
-#include "nus_cmd.h"
-
-/* LED which indicates that Central is connected. */
-#define NUS_STATUS_LED            DK_LED1
-/* UART command that will turn on found light bulb(s). */
-#define COMMAND_ON                "n"
-/**< UART command that will turn off found light bulb(s). */
-#define COMMAND_OFF               "f"
-/**< UART command that will turn toggle found light bulb(s). */
-#define COMMAND_TOGGLE            "t"
-/**< UART command that will increase brightness of found light bulb(s). */
-#define COMMAND_INCREASE          "i"
-/**< UART command that will decrease brightness of found light bulb(s). */
-#define COMMAND_DECREASE          "d"
-#endif /* CONFIG_BT_NUS */
 
 /* Source endpoint used to control light bulb. */
 #define LIGHT_SWITCH_ENDPOINT      1
@@ -263,19 +235,7 @@ ZB_AF_DECLARE_ENDPOINT_DESC(
 /* Declare application's device context (list of registered endpoints)
  * for Dimmer Switch device.
  */
-#ifndef CONFIG_ZIGBEE_FOTA
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(dimmer_switch_ctx, dimmer_switch_ep);
-#else
-
-  #if LIGHT_SWITCH_ENDPOINT == CONFIG_ZIGBEE_FOTA_ENDPOINT
-    #error "Light switch and Zigbee OTA endpoints should be different."
-  #endif
-
-extern zb_af_endpoint_desc_t zigbee_fota_client_ep;
-ZBOSS_DECLARE_DEVICE_CTX_2_EP(dimmer_switch_ctx,
-			      zigbee_fota_client_ep,
-			      dimmer_switch_ep);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /* Forward declarations. */
 static void light_switch_button_handler(struct k_timer *timer);
@@ -328,129 +288,30 @@ static void write_attr_callback(zb_bufid_t bufid)
 	zb_buf_free(bufid);
 }
 
-
-const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(i2c0));
-uint8_t address = 0x77;
-
-typedef struct {
-    int16_t  ac1;
-    int16_t  ac2;
-    int16_t  ac3;
-    uint16_t ac4;
-    uint16_t ac5;
-    uint16_t ac6;
-    int16_t  b1;
-    int16_t  b2;
-    int16_t  mb;
-    int16_t  mc;
-    int16_t  md;
-} bmp180_calib_t;
-
-static bmp180_calib_t calib_data;
-
-void bmp_init()
+static void send_temperature_cb(zb_bufid_t bufid)
 {
-    uint8_t calib_reg = 0xAA;
-    uint8_t calib_read[22]; 
+    int32_t temp_raw;
+    int err = bmp180_read_temperature(&temp_raw);
+
+    if (err != 0) {
+        LOG_ERR("Failed to read BMP180: %d", err);
+        zb_buf_free(bufid);
+        return;
+    }
+
+    zb_int16_t temp_zigbee = (zb_int16_t)(temp_raw);
+    zb_uint8_t *ptr;
+
+    ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
+
+    ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
+        ptr,
+        ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
+        ZB_ZCL_ATTR_TYPE_S16,
+        (zb_uint8_t *)&temp_zigbee);
     
-    i2c_write_read(i2c_dev, address, &calib_reg, 1, calib_read, 22);
-
-    calib_data.ac1 = (calib_read[0 ] << 8) | calib_read[1 ];
-    calib_data.ac2 = (calib_read[2 ] << 8) | calib_read[3 ];
-    calib_data.ac3 = (calib_read[4 ] << 8) | calib_read[5 ];
-    calib_data.ac4 = (calib_read[6 ] << 8) | calib_read[7 ];
-    calib_data.ac5 = (calib_read[8 ] << 8) | calib_read[9 ];
-    calib_data.ac6 = (calib_read[10] << 8) | calib_read[11];
-    calib_data.b1  = (calib_read[12] << 8) | calib_read[13];
-    calib_data.b2  = (calib_read[14] << 8) | calib_read[15];
-    calib_data.mb  = (calib_read[16] << 8) | calib_read[17];
-    calib_data.mc  = (calib_read[18] << 8) | calib_read[19];
-    calib_data.md  = (calib_read[20] << 8) | calib_read[21];
-    
-    printk("BMP180 Calibration Data Loaded Successfully.\n");
-}
-
-
-uint32_t read_temperature()
-{
-    // read uncompressed temperature value
-    uint8_t reg_addr = 0xF4;
-    uint8_t command = 0x2E;
-    uint8_t buffer[2] = {reg_addr, command};
-    i2c_write(i2c_dev, buffer, 2, address);
-    
-    // wait for temp readout
-    k_msleep(5);
-    
-    uint8_t ut_reg = 0xF6;
-    uint8_t ut_buffer[2];
-    i2c_write_read(i2c_dev, address, &ut_reg, 1, ut_buffer, 2);
-
-
-    int32_t UT = (int32_t)((ut_buffer[0] << 8) | ut_buffer[1]);
-    // printk("UT: 0x%08X\n", UT);
-
-    int32_t X1, X2, B5, T;
-    X1 = (UT - (int32_t)calib_data.ac6) * (int32_t)calib_data.ac5 / (1 << 15);
-    X2 = ((int32_t)calib_data.mc * (1 << 11)) / (X1 + (int32_t)calib_data.md);
-    B5 = X1 + X2;
-    T = (B5 + 8) / (1 << 4);
-
-    printk("Temperature: %d.%d C\n", T / 10, T % 10);
-	return((uint32_t)T);
-}
-
-// int main(void)
-// {
-//     if (!device_is_ready(i2c_dev)) {
-//         printk("Cannot init I2C\n");
-//         return 0;
-//     }
-
-//     // Send empty packet to address / ping
-//     uint8_t data = 0;
-//     if (i2c_write(i2c_dev, &data, 0, address) == 0) {
-//         printk("Device found at : 0x%02X\n", address);
-//     }
-    
-//     //read_calibration();
-//     bmp_init();
-//     read_temperature();
-    
-//     return 0;
-// }
-
-
-static void send_random_string_cb(zb_bufid_t bufid)
-{
-	// 1. Reduci containerul local de la 32 de biti la 16 biti cu semn
-	zb_int16_t temp_serialized = (zb_int16_t)read_temperature();
-
-	zb_uint8_t *ptr;
-	ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
-
-	// 2. Transmiti tipul S16 si adresa variabilei de 16 biti
-	ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
-		ptr,
-		ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
-		ZB_ZCL_ATTR_TYPE_S16,
-		(zb_uint8_t *)&temp_serialized);
-	
-    // uint32_t temperature = read_temperature();
-
-    // zb_uint8_t *ptr;
-    // ZB_ZCL_GENERAL_INIT_WRITE_ATTR_REQ(bufid, ptr, ZB_ZCL_ENABLE_DEFAULT_RESPONSE);
-
-    // // Nota: Daca temperatura este stocata ca intreg pe 16 biti (S16) conform standardului ZCL Temp Measurement:
-    // // zb_int16_t temp_raw = (zb_int16_t)temperature;
-    
-    // ZB_ZCL_GENERAL_ADD_VALUE_WRITE_ATTR_REQ(
-    //     ptr,
-    //     ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
-    //     ZB_ZCL_ATTR_TYPE_S32,
-    //     (zb_uint32_t *)&temperature); // Sau &temp_raw
-	
     zb_uint16_t coord_addr = 0x0000;
+	
     ZB_ZCL_GENERAL_SEND_WRITE_ATTR_REQ(
         bufid,
         ptr,
@@ -538,7 +399,7 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 			ZB_ERROR_CHECK(zb_err_code);
 
 			/* Queue custom random string transmission */
-			zb_ret_t rand_err = zb_buf_get_out_delayed(send_random_string_cb);
+			zb_ret_t rand_err = zb_buf_get_out_delayed(send_temperature_cb);
 			if (rand_err != RET_OK) {
 				LOG_ERR("Failed to queue random string transmission (err %d)", rand_err);
 			}
@@ -789,63 +650,7 @@ static void light_switch_button_handler(struct k_timer *timer)
 	}
 }
 
-#ifdef CONFIG_ZIGBEE_FOTA
-static void confirm_image(void)
-{
-	if (!boot_is_img_confirmed()) {
-		int ret = boot_write_img_confirmed();
 
-		if (ret) {
-			LOG_ERR("Couldn't confirm image: %d", ret);
-		} else {
-			LOG_INF("Marked image as OK");
-		}
-	}
-}
-
-static void ota_evt_handler(const struct zigbee_fota_evt *evt)
-{
-	switch (evt->id) {
-	case ZIGBEE_FOTA_EVT_PROGRESS:
-		dk_set_led(OTA_ACTIVITY_LED, evt->dl.progress % 2);
-		break;
-
-	case ZIGBEE_FOTA_EVT_FINISHED:
-		LOG_INF("Reboot application.");
-		/* Power on unused sections of RAM to allow MCUboot to use it. */
-		if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
-			power_up_unused_ram();
-		}
-
-		sys_reboot(SYS_REBOOT_COLD);
-		break;
-
-	case ZIGBEE_FOTA_EVT_ERROR:
-		LOG_ERR("OTA image transfer failed.");
-		break;
-
-	default:
-		break;
-	}
-}
-
-/**@brief Callback function for handling ZCL commands.
- *
- * @param[in]   bufid   Reference to Zigbee stack buffer
- *                      used to pass received data.
- */
-static void zcl_device_cb(zb_bufid_t bufid)
-{
-	zb_zcl_device_callback_param_t *device_cb_param =
-		ZB_BUF_GET_PARAM(bufid, zb_zcl_device_callback_param_t);
-
-	if (device_cb_param->device_cb_id == ZB_ZCL_OTA_UPGRADE_VALUE_CB_ID) {
-		zigbee_fota_zcl_cb(bufid);
-	} else {
-		device_cb_param->status = RET_NOT_IMPLEMENTED;
-	}
-}
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 /**@brief Zigbee stack event handler.
  *
@@ -861,10 +666,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	/* Update network status LED. */
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Pass signal to the OTA client implementation. */
-	zigbee_fota_signal_handler(bufid);
-#endif /* CONFIG_ZIGBEE_FOTA */
+
 
 	switch (sig) {
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
@@ -909,66 +711,6 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		zb_buf_free(bufid);
 	}
 }
-
-#if CONFIG_BT_NUS
-
-static void turn_on_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_ON_ID, 0);
-}
-
-static void turn_off_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_OFF_ID, 0);
-}
-
-static void toggle_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_on_off,
-				   ZB_ZCL_CMD_ON_OFF_TOGGLE_ID, 0);
-}
-
-static void increase_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP, 0);
-}
-
-static void decrease_cmd(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	zb_buf_get_out_delayed_ext(light_switch_send_step,
-				   ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN, 0);
-}
-
-static void on_nus_connect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_on(NUS_STATUS_LED);
-}
-
-static void on_nus_disconnect(struct k_work *item)
-{
-	ARG_UNUSED(item);
-	dk_set_led_off(NUS_STATUS_LED);
-}
-
-static struct nus_entry commands[] = {
-	NUS_COMMAND(COMMAND_ON, turn_on_cmd),
-	NUS_COMMAND(COMMAND_OFF, turn_off_cmd),
-	NUS_COMMAND(COMMAND_TOGGLE, toggle_cmd),
-	NUS_COMMAND(COMMAND_INCREASE, increase_cmd),
-	NUS_COMMAND(COMMAND_DECREASE, decrease_cmd),
-	NUS_COMMAND(NULL, NULL),
-};
-
-#endif /* CONFIG_BT_NUS */
 
 #if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
 
@@ -1053,16 +795,53 @@ void set_tx_power(void)
 
 #endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
+static struct k_work rtc_work;
+
+static void zb_trigger_temp_report(zb_bufid_t param)
+{
+	ARG_UNUSED(param);
+	zb_ret_t err = zb_buf_get_out_delayed(send_temperature_cb);
+	if (err != RET_OK) {
+		LOG_ERR("Failed to allocate ZBOSS buffer for temp report (err %d)", err);
+	}
+}
+
+static void rtc_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	ZB_SCHEDULE_APP_CALLBACK(zb_trigger_temp_report, 0);
+}
+
+static void rtc2_isr(const void *arg)
+{
+	ARG_UNUSED(arg);
+	bool is_compare_event = false;
+
+	int err = my_rtc_get_compare_event(2, 1, &is_compare_event);
+	
+	if (err == 0 && is_compare_event) {
+		my_rtc_clear_compare_event(2, 1);
+		
+		// clear counter to make it periodic (4-second interval)
+		my_rtc_clear(2);
+		my_rtc_start_compare(2, 1, 32);
+
+		// Zephyr workqueue
+		k_work_submit(&rtc_work);
+	}
+}
+
 int main(void)
 {
 	LOG_INF("Starting ZBOSS Light Switch example");
+
 
 	/* Initialize. */
 	configure_gpio();
 	alarm_timers_init();
 	register_factory_reset_button(FACTORY_RESET_BUTTON);
 	
-	bmp_init();
+	bmp180_init();
     
 
 	zigbee_erase_persistent_storage(ERASE_PERSISTENT_CONFIG);
@@ -1081,27 +860,16 @@ int main(void)
 	 * is pressed.
 	 */
 	
-#if defined BUTTON_SLEEPY
+	#if defined BUTTON_SLEEPY
 	if (dk_get_buttons() & BUTTON_SLEEPY) {
 		zigbee_configure_sleepy_behavior(true);
 	}
-#endif
+	#endif
 
 	/* Power off unused sections of RAM to lower device power consumption. */
 	if (IS_ENABLED(CONFIG_RAM_POWER_DOWN_LIBRARY)) {
 		power_down_unused_ram();
 	}
-
-#ifdef CONFIG_ZIGBEE_FOTA
-	/* Initialize Zigbee FOTA download service. */
-	zigbee_fota_init(ota_evt_handler);
-
-	/* Mark the current firmware as valid. */
-	confirm_image();
-
-	/* Register callback for handling ZCL commands. */
-	ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
 	/* Register dimmer switch device context (endpoints). */
 	ZB_AF_REGISTER_DEVICE_CTX(&dimmer_switch_ctx);
@@ -1110,25 +878,48 @@ int main(void)
 
 	/* Register handlers to identify notifications */
 	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(LIGHT_SWITCH_ENDPOINT, identify_cb);
-#ifdef CONFIG_ZIGBEE_FOTA
-	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(CONFIG_ZIGBEE_FOTA_ENDPOINT, identify_cb);
-#endif /* CONFIG_ZIGBEE_FOTA */
 
-#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
-	set_tx_power();
-#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
+
+	#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)
+		set_tx_power();
+	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 
-#if CONFIG_BT_NUS
-	/* Initialize NUS command service. */
-	nus_cmd_init(on_nus_connect, on_nus_disconnect, commands);
-#endif /* CONFIG_BT_NUS */
-
 	LOG_INF("ZBOSS Light Switch example started");
+
+	if (my_timer_init(MY_TIMER_1, 4) != 0) {
+		LOG_ERR("Failed to initialize TIMER1");
+	}
+	if (my_timer_start(MY_TIMER_1) != 0) {
+		LOG_ERR("Failed to start TIMER1");
+	}
+
+	k_work_init(&rtc_work, rtc_work_handler);
+
+	if (my_rtc_init(2, 4095) != 0) { // 125 ms / tick
+		LOG_ERR("Failed to initialize RTC2");
+	}
+	if (my_rtc_start_compare(2, 1, 32) != 0) { // 32 ticks = 4 seconds
+		LOG_ERR("Failed to set RTC2 compare value");
+	}
+	if (my_rtc_enable_interrupt(2, MY_RTC_INT_COMPARE1_MASK) != 0) {
+		LOG_ERR("Failed to enable RTC2 interrupt mask");
+	}
+
+	// Enable the RTC2 interrupt in the NVIC
+	IRQ_CONNECT(RTC2_IRQn, 2, rtc2_isr, NULL, 0);
+	irq_enable(RTC2_IRQn);
+
+	if (my_rtc_start(2) != 0) {
+		LOG_ERR("Failed to start RTC2");
+	}
+	
+	k_msleep(10);
 
 	while (1) {
 		k_sleep(K_FOREVER);
 	}
+
 }

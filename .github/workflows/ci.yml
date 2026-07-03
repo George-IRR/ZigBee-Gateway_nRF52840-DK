@@ -8,10 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       shared: ${{ steps.filter.outputs.shared }}
-      coordinator: ${{ steps.filter.outputs.coordinator }}
-      light_switch: ${{ steps.filter.outputs.light_switch }}
-      bmp180: ${{ steps.filter.outputs.bmp180 }}
-      bmp180_device: ${{ steps.filter.outputs.bmp180_device }}
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -37,6 +35,42 @@ jobs:
             bmp180_device:
               - 'zigbee_end_device/bmp180_device/**'
               - '.github/workflows/ci.yml'
+
+      - name: Generate Dynamic Matrix
+        id: set-matrix
+        run: |
+          SHARED="${{ steps.filter.outputs.shared }}"
+          COORDINATOR="${{ steps.filter.outputs.coordinator }}"
+          LIGHT_SWITCH="${{ steps.filter.outputs.light_switch }}"
+          BMP180="${{ steps.filter.outputs.bmp180 }}"
+          BMP180_DEVICE="${{ steps.filter.outputs.bmp180_device }}"
+          
+          JSON="[]"
+          
+          add_to_matrix() {
+            JSON=$(echo "$JSON" | jq -c ". + [{\"app-name\": \"$1\", \"app-path\": \"$2\", \"sysbuild\": $3, \"id\": \"$4\"}]")
+          }
+          
+          if [ "$SHARED" = "true" ] || [ "$COORDINATOR" = "true" ]; then
+            add_to_matrix "Network Coordinator" "zigbee_network/network_coordinator" true "coordinator"
+          fi
+          if [ "$SHARED" = "true" ] || [ "$LIGHT_SWITCH" = "true" ]; then
+            add_to_matrix "Light Switch" "zigbee_end_device/light_switch" true "light_switch"
+          fi
+          if [ "$SHARED" = "true" ] || [ "$BMP180" = "true" ]; then
+            add_to_matrix "BMP180 Application" "zigbee_end_device/bmp180" false "bmp180"
+          fi
+          if [ "$SHARED" = "true" ] || [ "$BMP180_DEVICE" = "true" ]; then
+            add_to_matrix "BMP180 Device" "zigbee_end_device/bmp180_device" false "bmp180_device"
+          fi
+          
+          if [ "$JSON" = "[]" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":[]}" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "matrix={\"include\":$JSON}" >> $GITHUB_OUTPUT
+          fi
 
   # 1. Host-Side Unit Tests
   run-tests:
@@ -68,31 +102,13 @@ jobs:
     name: Build Firmware
     runs-on: ubuntu-latest
     needs: [detect-changes, run-tests]
-    # Filter by job level, stop container if there are no relevant changes
     if: |
       always() && 
       (needs.run-tests.result == 'success' || needs.run-tests.result == 'skipped') &&
-      (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs[matrix.id] == 'true')
+      needs.detect-changes.outputs.has_changes == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - app-name: "Network Coordinator"
-            app-path: "zigbee_network/network_coordinator"
-            sysbuild: true
-            id: "coordinator"
-          - app-name: "Light Switch"
-            app-path: "zigbee_end_device/light_switch"
-            sysbuild: true
-            id: "light_switch"
-          - app-name: "BMP180 Application"
-            app-path: "zigbee_end_device/bmp180"
-            sysbuild: false
-            id: "bmp180"
-          - app-name: "BMP180 Device"
-            app-path: "zigbee_end_device/bmp180_device"
-            sysbuild: false
-            id: "bmp180_device"
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
 
     container:
       image: nordicplayground/nrfconnect-sdk:v2.9-branch

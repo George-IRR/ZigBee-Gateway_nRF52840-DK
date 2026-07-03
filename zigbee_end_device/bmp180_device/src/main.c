@@ -82,25 +82,12 @@
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
 
-struct bulb_context {
-	zb_uint8_t endpoint;
-	zb_uint16_t short_addr;
-	struct k_timer find_alarm;
-};
-
-struct buttons_context {
-	uint32_t state;
-	atomic_t long_poll;
-	struct k_timer alarm;
-};
-
 struct zb_device_ctx {
 	zb_zcl_basic_attrs_t basic_attr;
 	zb_zcl_identify_attrs_t identify_attr;
 };
 
-static struct bulb_context bulb_ctx;
-static struct buttons_context buttons_ctx;
+static struct zb_device_ctx dev_ctx;
 static struct zb_device_ctx dev_ctx;
 
 /* Declare attribute list for Basic cluster (server). */
@@ -237,11 +224,7 @@ ZB_AF_DECLARE_ENDPOINT_DESC(
  */
 ZBOSS_DECLARE_DEVICE_CTX_1_EP(dimmer_switch_ctx, dimmer_switch_ep);
 
-/* Forward declarations. */
-static void light_switch_button_handler(struct k_timer *timer);
-static void find_light_bulb_alarm(struct k_timer *timer);
-static void find_light_bulb(zb_bufid_t bufid);
-static void light_switch_send_on_off(zb_bufid_t bufid, zb_uint16_t on_off);
+
 
 
 /**@brief Starts identifying the device.
@@ -305,67 +288,10 @@ static void send_temperature_cb(zb_bufid_t bufid)
  */
 static void button_handler(uint32_t button_state, uint32_t has_changed)
 {
-	zb_uint16_t cmd_id;
-	zb_ret_t zb_err_code;
-
 	/* Inform default signal handler about user input at the device. */
 	user_input_indicate();
 
 	check_factory_reset_button(button_state, has_changed);
-
-	if (bulb_ctx.short_addr == 0xFFFF) {
-		LOG_DBG("No bulb found yet.");
-		return;
-	}
-
-	switch (has_changed) {
-	case BUTTON_ON:
-		LOG_DBG("ON - button changed");
-		cmd_id = ZB_ZCL_CMD_ON_OFF_ON_ID;
-		break;
-	case BUTTON_OFF:
-		LOG_DBG("OFF - button changed");
-		cmd_id = ZB_ZCL_CMD_ON_OFF_OFF_ID;
-		break;
-
-	default:
-		LOG_DBG("Unhandled button");
-		return;
-	}
-
-	switch (button_state) {
-	case BUTTON_ON:
-	case BUTTON_OFF:
-		LOG_DBG("Button pressed");
-		buttons_ctx.state = button_state;
-
-		/* Alarm can be scheduled only once. Next alarm only resets
-		 * counting.
-		 */
-		k_timer_start(&buttons_ctx.alarm, BUTTON_LONG_POLL_TMO,
-			      K_NO_WAIT);
-		break;
-	case 0:
-		LOG_DBG("Button released");
-
-		k_timer_stop(&buttons_ctx.alarm);
-
-		if (atomic_set(&buttons_ctx.long_poll, ZB_FALSE) == ZB_FALSE) {
-			/* Allocate output buffer and send on/off command. */
-			zb_err_code = zb_buf_get_out_delayed_ext(
-				light_switch_send_on_off, cmd_id, 0);
-			ZB_ERROR_CHECK(zb_err_code);
-
-			/* Queue custom random string transmission */
-			zb_ret_t rand_err = zb_buf_get_out_delayed(send_temperature_cb);
-			if (rand_err != RET_OK) {
-				LOG_ERR("Failed to queue random string transmission (err %d)", rand_err);
-			}
-		}
-		break;
-	default:
-		break;
-	}
 }
 
 /**@brief Function for initializing LEDs and Buttons. */
@@ -384,11 +310,7 @@ static void configure_gpio(void)
 	}
 }
 
-static void alarm_timers_init(void)
-{
-	k_timer_init(&buttons_ctx.alarm, light_switch_button_handler, NULL);
-	k_timer_init(&bulb_ctx.find_alarm, find_light_bulb_alarm, NULL);
-}
+
 
 /**@brief Function for initializing all clusters attributes. */
 static void app_clusters_attr_init(void)
@@ -407,169 +329,7 @@ static void app_clusters_attr_init(void)
  *                       used to construct on/off request.
  * @param[in]   cmd_id   ZCL command id.
  */
-static void light_switch_send_on_off(zb_bufid_t bufid, zb_uint16_t cmd_id)
-{
-	LOG_INF("Send ON/OFF command: %d", cmd_id);
 
-	ZB_ZCL_ON_OFF_SEND_REQ(bufid,
-			       bulb_ctx.short_addr,
-			       ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
-			       bulb_ctx.endpoint,
-			       LIGHT_SWITCH_ENDPOINT,
-			       ZB_AF_HA_PROFILE_ID,
-			       ZB_ZCL_DISABLE_DEFAULT_RESPONSE,
-			       cmd_id,
-			       NULL);
-}
-
-/**@brief Function for sending step requests to the light bulb.
- *
- * @param[in]   bufid        Non-zero reference to Zigbee stack buffer that
- *                           will be used to construct step request.
- * @param[in]   cmd_id       ZCL command id.
- */
-static void light_switch_send_step(zb_bufid_t bufid, zb_uint16_t cmd_id)
-{
-	LOG_INF("Send step level command: %d", cmd_id);
-
-	ZB_ZCL_LEVEL_CONTROL_SEND_STEP_REQ(bufid,
-					   bulb_ctx.short_addr,
-					   ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
-					   bulb_ctx.endpoint,
-					   LIGHT_SWITCH_ENDPOINT,
-					   ZB_AF_HA_PROFILE_ID,
-					   ZB_ZCL_DISABLE_DEFAULT_RESPONSE,
-					   NULL,
-					   cmd_id,
-					   DIMM_STEP,
-					   DIMM_TRANSACTION_TIME);
-}
-
-/**@brief Callback function receiving finding procedure results.
- *
- * @param[in]   bufid   Reference to Zigbee stack buffer used to pass
- *                      received data.
- */
-static void find_light_bulb_cb(zb_bufid_t bufid)
-{
-	/* Get the beginning of the response. */
-	zb_zdo_match_desc_resp_t *resp =
-		(zb_zdo_match_desc_resp_t *) zb_buf_begin(bufid);
-	/* Get the pointer to the parameters buffer, which stores APS layer
-	 * response.
-	 */
-	zb_apsde_data_indication_t *ind = ZB_BUF_GET_PARAM(bufid,
-							   zb_apsde_data_indication_t);
-	zb_uint8_t *match_ep;
-
-	if ((resp->status == ZB_ZDP_STATUS_SUCCESS) &&
-	    (resp->match_len > 0) &&
-	    (bulb_ctx.short_addr == 0xFFFF)) {
-
-		/* Match EP list follows right after response header. */
-		match_ep = (zb_uint8_t *)(resp + 1);
-
-		/* We are searching for exact cluster, so only 1 EP
-		 * may be found.
-		 */
-		bulb_ctx.endpoint = *match_ep;
-		bulb_ctx.short_addr = ind->src_addr;
-
-		LOG_INF("Found bulb addr: %d ep: %d",
-			bulb_ctx.short_addr,
-			bulb_ctx.endpoint);
-
-		k_timer_stop(&bulb_ctx.find_alarm);
-		dk_set_led_on(BULB_FOUND_LED);
-	} else {
-		LOG_INF("Bulb not found, try again");
-	}
-
-	if (bufid) {
-		zb_buf_free(bufid);
-	}
-}
-
-/**@brief Find bulb allarm handler.
- *
- * @param[in]   timer   Address of timer.
- */
-static void find_light_bulb_alarm(struct k_timer *timer)
-{
-	ZB_ERROR_CHECK(zb_buf_get_out_delayed(find_light_bulb));
-}
-
-/**@brief Function for sending ON/OFF and Level Control find request.
- *
- * @param[in]   bufid   Reference to Zigbee stack buffer that will be used to
- *                      construct find request.
- */
-static void find_light_bulb(zb_bufid_t bufid)
-{
-	zb_zdo_match_desc_param_t *req;
-	zb_uint8_t tsn = ZB_ZDO_INVALID_TSN;
-
-	/* Initialize pointers inside buffer and reserve space for
-	 * zb_zdo_match_desc_param_t request.
-	 */
-	req = zb_buf_initial_alloc(bufid,
-				   sizeof(zb_zdo_match_desc_param_t) + (1) * sizeof(zb_uint16_t));
-
-	req->nwk_addr = MATCH_DESC_REQ_ROLE;
-	req->addr_of_interest = MATCH_DESC_REQ_ROLE;
-	req->profile_id = ZB_AF_HA_PROFILE_ID;
-
-	/* We are searching for 2 clusters: On/Off and Level Control Server. */
-	req->num_in_clusters = 2;
-	req->num_out_clusters = 0;
-	req->cluster_list[0] = ZB_ZCL_CLUSTER_ID_ON_OFF;
-	req->cluster_list[1] = ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL;
-
-	/* Set 0xFFFF to reset short address in order to parse
-	 * only one response.
-	 */
-	bulb_ctx.short_addr = 0xFFFF;
-	tsn = zb_zdo_match_desc_req(bufid, find_light_bulb_cb);
-
-	/* Free buffer if failed to send a request. */
-	if (tsn == ZB_ZDO_INVALID_TSN) {
-		zb_buf_free(bufid);
-
-		LOG_ERR("Failed to send Match Descriptor request");
-	}
-}
-
-/**@brief Callback for detecting button press duration.
- *
- * @param[in]   timer   Address of timer.
- */
-static void light_switch_button_handler(struct k_timer *timer)
-{
-	zb_ret_t zb_err_code;
-	zb_uint16_t cmd_id;
-
-	if (dk_get_buttons() & buttons_ctx.state) {
-		atomic_set(&buttons_ctx.long_poll, ZB_TRUE);
-		if (buttons_ctx.state == BUTTON_ON) {
-			cmd_id = ZB_ZCL_LEVEL_CONTROL_STEP_MODE_UP;
-		} else {
-			cmd_id = ZB_ZCL_LEVEL_CONTROL_STEP_MODE_DOWN;
-		}
-
-		/* Allocate output buffer and send step command. */
-		zb_err_code = zb_buf_get_out_delayed_ext(light_switch_send_step,
-							 cmd_id,
-							 0);
-		if (!zb_err_code) {
-			LOG_WRN("Buffer is full");
-		}
-
-		k_timer_start(&buttons_ctx.alarm, BUTTON_LONG_POLL_TMO,
-			      K_NO_WAIT);
-	} else {
-		atomic_set(&buttons_ctx.long_poll, ZB_FALSE);
-	}
-}
 
 
 
@@ -608,19 +368,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 			dk_set_led_on(BULB_FOUND_LED);
 		}
 		break;
-	case ZB_ZDO_SIGNAL_LEAVE:
-		/* If device leaves the network, reset bulb short_addr. */
-		if (status == RET_OK) {
-			zb_zdo_signal_leave_params_t *leave_params =
-				ZB_ZDO_SIGNAL_GET_PARAMS(sig_hndler, zb_zdo_signal_leave_params_t);
 
-			if (leave_params->leave_type == ZB_NWK_LEAVE_TYPE_RESET) {
-				bulb_ctx.short_addr = 0xFFFF;
-			}
-		}
-		/* Call default signal handler. */
-		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
-		break;
 
 	default:
 		/* Call default signal handler. */
@@ -676,22 +424,14 @@ int main(void)
 
 	/* Initialize. */
 	configure_gpio();
-	alarm_timers_init();
 	register_factory_reset_button(FACTORY_RESET_BUTTON);
-	
+
 	bmp180_init();
-    
 
 	zigbee_erase_persistent_storage(ERASE_PERSISTENT_CONFIG);
 	zb_set_ed_timeout(ED_AGING_TIMEOUT_64MIN);
 	zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(3000));
 
-	/* Set default bulb short_addr directly to the Coordinator */
-	bulb_ctx.short_addr = 0x0000;
-	bulb_ctx.endpoint = 10; /* Must match ZIGBEE_COORDINATOR_ENDPOINT of coordinator */
-
-	/* Disable the match descriptor discovery timer to avoid overwriting addresses */
-	// k_timer_start(&bulb_ctx.find_alarm, MATCH_DESC_REQ_START_DELAY, MATCH_DESC_REQ_TIMEOUT);
 
 	/* If "sleepy button" is defined, check its state during Zigbee
 	 * initialization and enable sleepy behavior at device if defined button

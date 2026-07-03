@@ -19,3 +19,22 @@ The `ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER` macro registers an application cal
 * Toggle function `toggle_identify_led()` and the identification status check `identify_cb()`.
 * Button release identify triggers from `button_handler()`.
 * Action trigger function `start_identifying()`.
+
+---
+
+## 2. alarm_timers_init & Bulb Find Logic
+
+### 2.1 What it is
+`alarm_timers_init()` initialized two software timers (`buttons_ctx.alarm` and `bulb_ctx.find_alarm`). These timers were used to periodically schedule active Zigbee Match Descriptor Requests to find nearby Zigbee light bulbs and handle long-press dimming actions.
+
+### 2.2 Why it was removed
+* **Static Addressing:** The end-device does not discover endpoints dynamically. It addresses the Network Coordinator directly at static address `0x0000` (Endpoint `10`) for temperature reporting.
+* **No Dimmer Behavior:** The application has been refactored from a dimmer switch into a sensor reporter. Active light-switch button handling (e.g., UP/DOWN dimming commands, ON/OFF toggle commands, and button timers) is dead logic.
+* **Drastic Code Reduction:** Removing this logic allowed us to drop the entire Match Descriptor finding state machine and serial command builders (`find_light_bulb`, `find_light_bulb_cb`, `light_switch_send_on_off`, `light_switch_send_step`, `light_switch_button_handler`), cleaning up ~200 lines of boilerplate.
+
+### 2.3 Removed Elements
+* The initialization function `alarm_timers_init()` and variables `buttons_ctx`, `bulb_ctx`.
+* Finding functions `find_light_bulb()`, `find_light_bulb_cb()`, `find_light_bulb_alarm()`.
+* Bulb transmitter helpers `light_switch_send_on_off()` and `light_switch_send_step()`.
+* Button hold polling logic inside `button_handler()` (simplified to forward factory resets only).
+* Unused timers declaration from `main()`.

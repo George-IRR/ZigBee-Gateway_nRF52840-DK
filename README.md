@@ -54,7 +54,12 @@ The system acts as a bridge between a wireless Zigbee sensor network and a contr
 
 For in-depth explanations and strategies, refer to the [Testing Strategy and Execution Guide](Docs/testing_guide.md).
 
-### 4.1 Global Project Configuration (`config.env`)
+### 4.1 Software Requirements
+This project was developed and verified using the following toolchain and SDK versions:
+* **nRF Connect SDK (NCS) Version:** `v2.9.2` (Zephyr `v3.7.99-ncs2-2`)
+* **nRF Connect Toolchain Version:** `v2.8.20241119.788085347090` (Toolchain ID: `b77d8c1312`)
+
+### 4.2 Global Project Configuration (`config.env`)
 The repository contains a global configuration file [config.env](config.env) at the root level. **Before building, flashing, or testing, you must edit this file** to set your J-Link target serial numbers and SDK toolchain paths:
 ```env
 # Hardware Device IDs (nRF52840-DK J-Link Serial Numbers)
@@ -65,7 +70,7 @@ COORD_DEV_ID=xxxxxxxxxx
 NCS_TOOLCHAIN_DIR=/home/xxxxx/ncs/toolchains/b77d8c1312
 ```
 
-### 4.2 Environment Preparation
+### 4.3 Environment Preparation
 Export the toolchain paths using the settings defined in your `config.env`:
 ```bash
 # Load variables from config.env
@@ -78,7 +83,7 @@ export ZEPHYR_TOOLCHAIN_VARIANT="zephyr"
 export ZEPHYR_SDK_INSTALL_DIR="$NCS_TOOLCHAIN_DIR/opt/zephyr-sdk"
 ```
 
-### 4.3 Flashing Devices
+### 4.4 Flashing Devices
 
 > [!WARNING]
 > On modern NCS setups or machines without SEGGER's command-line tools, `nrfjprog` is deprecated or missing.
@@ -100,7 +105,12 @@ Run the helper script which automatically loads `config.env` and flashes the tar
 ./flash_devices.sh all
 ```
 
-#### Option B: Flashing manually (without script)
+#### Option B: Flashing with nRF Connect (VSCode extension)
+Using the [online](https://academy.nordicsemi.com/courses/nrf-connect-sdk-fundamentals/lessons/lesson-1-nrf-connect-sdk-introduction/topic/exercise-2-1/?version=v2.9.0-v2.7.0) or local ( .PDF ) version
+
+[Exercise 2 - Build and flash your first nRF Connect SDK application.pdf](<Docs/Datasheet/Exercise 2 - Build and flash your first nRF Connect SDK application - Nordic Developer Academy.pdf>)
+
+#### Option C: Flashing manually (without script)
 To flash manually without the script, make sure you are in the top-level directory of your west workspace (e.g., `~/ncs/v2.9.2`) and load `config.env` first:
 ```bash
 source <path_to_repo>/config.env
@@ -112,7 +122,7 @@ west flash -d <path_to_end_device>/build --dev-id $SWITCH_DEV_ID --runner nrfuti
 west flash -d <path_to_coordinator>/build --domain network_coordinator --dev-id $COORD_DEV_ID --runner nrfutil
 ```
 
-### 4.4 Running Tests
+### 4.5 Running Tests
 
 We have implemented three levels of testing for the BMP180 Zigbee application:
 

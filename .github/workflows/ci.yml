@@ -1,11 +1,8 @@
 name: Embedded CI/CD Pipeline
 
-on:
-  push:
-    branches: [ main, develop ]
+on: [push]
 
 jobs:
-  # Job pentru analiza structurii de directoare modificate
   detect-changes:
     name: Detect Changes
     runs-on: ubuntu-latest
@@ -89,7 +86,7 @@ jobs:
             id: "bmp180"
           - app-name: "BMP180 Device"
             app-path: "zigbee_end_device/bmp180_device"
-            sysbuild: true
+            sysbuild: false
             id: "bmp180_device"
 
     container:

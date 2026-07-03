@@ -1,15 +1,24 @@
 #!/bin/bash
 
-# Absolute paths to build directories
-SWITCH_BUILD="/home/george/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_end_device/bmp180_device/build"
-COORD_BUILD="/home/george/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_network/network_coordinator/build"
+# Get script directory to make paths relative
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Device IDs
-COORD_DEV_ID="1050246989"
-SWITCH_DEV_ID="1050247285"
+# Load configurations from config.env
+if [ -f "$SCRIPT_DIR/config.env" ]; then
+    source "$SCRIPT_DIR/config.env"
+else
+    echo "Warning: config.env not found! Using hardcoded defaults."
+    SWITCH_DEV_ID="1050247285"
+    COORD_DEV_ID="1050246989"
+    NCS_TOOLCHAIN_DIR="/home/george/ncs/toolchains/b77d8c1312"
+fi
 
-# Set up toolchain environment variables if nRF Connect toolchain is installed
-TC_DIR="/home/george/ncs/toolchains/b77d8c1312"
+# Paths to build directories
+SWITCH_BUILD="$SCRIPT_DIR/zigbee_end_device/bmp180_device/build"
+COORD_BUILD="$SCRIPT_DIR/zigbee_network/network_coordinator/build"
+
+# Set up toolchain environment variables
+TC_DIR="$NCS_TOOLCHAIN_DIR"
 if [ -d "$TC_DIR" ]; then
     export PATH="$TC_DIR/bin:$TC_DIR/usr/bin:$TC_DIR/usr/local/bin:$TC_DIR/opt/bin:$TC_DIR/opt/nanopb/generator-bin:$TC_DIR/opt/zephyr-sdk/arm-zephyr-eabi/bin:$TC_DIR/opt/zephyr-sdk/riscv64-zephyr-elf/bin:$PATH"
     export LD_LIBRARY_PATH="$TC_DIR/lib:$TC_DIR/lib/x86_64-linux-gnu:$TC_DIR/usr/local/lib:$LD_LIBRARY_PATH"
@@ -22,12 +31,12 @@ if [ -d "$TC_DIR" ]; then
 fi
 
 flash_switch() {
-    echo "Flashing Light Switch (End Device)..."
+    echo "Flashing Light Switch (End Device, ID: $SWITCH_DEV_ID)..."
     west flash -d "$SWITCH_BUILD" --domain bmp180_device --dev-id "$SWITCH_DEV_ID"
 }
 
 flash_coordinator() {
-    echo "Flashing Network Coordinator..."
+    echo "Flashing Network Coordinator (ID: $COORD_DEV_ID)..."
     west flash -d "$COORD_BUILD" --domain network_coordinator --dev-id "$COORD_DEV_ID"
 }
 

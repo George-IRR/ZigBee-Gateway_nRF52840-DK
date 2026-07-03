@@ -10,19 +10,25 @@ from twister_harness import DeviceAdapter
 
 logger = logging.getLogger(__name__)
 
-def get_dev_ids_from_script():
-    # Attempt to dynamically parse SWITCH_DEV_ID and COORD_DEV_ID from flash_devices.sh
-    script_path = Path(__file__).resolve().parents[4] / "flash_devices.sh"
+def get_dev_ids_from_config():
+    # Attempt to load from config.env in repo root
+    repo_root = Path(__file__).resolve().parents[4]
+    config_file = repo_root / "config.env"
+    
     switch_id = "1050247285"
     coord_id = "1050246989"
-    if script_path.exists():
-        content = script_path.read_text()
-        m_switch = re.search(r'SWITCH_DEV_ID="(\d+)"', content)
-        m_coord = re.search(r'COORD_DEV_ID="(\d+)"', content)
-        if m_switch:
-            switch_id = m_switch.group(1)
-        if m_coord:
-            coord_id = m_coord.group(1)
+    
+    if config_file.exists():
+        for line in config_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                if key.strip() == "SWITCH_DEV_ID":
+                    switch_id = val.strip()
+                elif key.strip() == "COORD_DEV_ID":
+                    coord_id = val.strip()
     return switch_id, coord_id
 
 def get_serial_ports():
@@ -67,7 +73,7 @@ def test_e2e_communication(dut: DeviceAdapter):
     Verifies that the mocked temperature values sent by the End Device over Zigbee
     are correctly received and logged by the Coordinator.
     """
-    switch_id, coord_id = get_dev_ids_from_script()
+    switch_id, coord_id = get_dev_ids_from_config()
     logger.info(f"Looking for Switch (ED) ID: {switch_id}, Coordinator ID: {coord_id}")
     
     ports = get_serial_ports()

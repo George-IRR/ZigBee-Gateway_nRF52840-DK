@@ -248,34 +248,7 @@ static void light_switch_send_on_off(zb_bufid_t bufid, zb_uint16_t on_off);
  *
  * @param  bufid  Unused parameter, required by ZBOSS scheduler API.
  */
-static void start_identifying(zb_bufid_t bufid)
-{
-	ZVUNUSED(bufid);
 
-	if (ZB_JOINED()) {
-		/* Check if endpoint is in identifying mode,
-		 * if not, put desired endpoint in identifying mode.
-		 */
-		if (dev_ctx.identify_attr.identify_time ==
-		    ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE) {
-
-			zb_ret_t zb_err_code = zb_bdb_finding_binding_target(LIGHT_SWITCH_ENDPOINT);
-
-			if (zb_err_code == RET_OK) {
-				LOG_INF("Enter identify mode");
-			} else if (zb_err_code == RET_INVALID_STATE) {
-				LOG_WRN("RET_INVALID_STATE - Cannot enter identify mode");
-			} else {
-				ZB_ERROR_CHECK(zb_err_code);
-			}
-		} else {
-			LOG_INF("Cancel identify mode");
-			zb_bdb_finding_binding_target_cancel();
-		}
-	} else {
-		LOG_WRN("Device not in a network - cannot enter identify mode");
-	}
-}
 
 static void write_attr_callback(zb_bufid_t bufid)
 {
@@ -354,22 +327,7 @@ static void button_handler(uint32_t button_state, uint32_t has_changed)
 		LOG_DBG("OFF - button changed");
 		cmd_id = ZB_ZCL_CMD_ON_OFF_OFF_ID;
 		break;
-	case IDENTIFY_MODE_BUTTON:
-		if (IDENTIFY_MODE_BUTTON & button_state) {
-			/* Button changed its state to pressed */
-		} else {
-			/* Button changed its state to released */
-			if (was_factory_reset_done()) {
-				/* The long press was for Factory Reset */
-				LOG_DBG("After Factory Reset - ignore button release");
-			} else   {
-				/* Button released before Factory Reset */
 
-				/* Start identification mode */
-				ZB_SCHEDULE_APP_CALLBACK(start_identifying, 0);
-			}
-		}
-		return;
 	default:
 		LOG_DBG("Unhandled button");
 		return;
@@ -441,43 +399,6 @@ static void app_clusters_attr_init(void)
 
 	/* Identify cluster attributes data. */
 	dev_ctx.identify_attr.identify_time = ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE;
-}
-
-/**@brief Function to toggle the identify LED.
- *
- * @param  bufid  Unused parameter, required by ZBOSS scheduler API.
- */
-static void toggle_identify_led(zb_bufid_t bufid)
-{
-	static int blink_status;
-
-	dk_set_led(IDENTIFY_LED, (++blink_status) % 2);
-	ZB_SCHEDULE_APP_ALARM(toggle_identify_led, bufid, ZB_MILLISECONDS_TO_BEACON_INTERVAL(100));
-}
-
-/**@brief Function to handle identify notification events on the first endpoint.
- *
- * @param  bufid  Unused parameter, required by ZBOSS scheduler API.
- */
-static void identify_cb(zb_bufid_t bufid)
-{
-	zb_ret_t zb_err_code;
-
-	if (bufid) {
-		/* Schedule a self-scheduling function that will toggle the LED. */
-		ZB_SCHEDULE_APP_CALLBACK(toggle_identify_led, bufid);
-	} else {
-		/* Cancel the toggling function alarm and turn off LED. */
-		zb_err_code = ZB_SCHEDULE_APP_ALARM_CANCEL(toggle_identify_led, ZB_ALARM_ANY_PARAM);
-		ZVUNUSED(zb_err_code);
-
-		/* Update network status/idenitfication LED. */
-		if (ZB_JOINED()) {
-			dk_set_led_on(ZIGBEE_NETWORK_STATE_LED);
-		} else {
-			dk_set_led_off(ZIGBEE_NETWORK_STATE_LED);
-		}
-	}
 }
 
 /**@brief Function for sending ON/OFF requests to the light bulb.
@@ -793,8 +714,7 @@ int main(void)
 
 	app_clusters_attr_init();
 
-	/* Register handlers to identify notifications */
-	ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(LIGHT_SWITCH_ENDPOINT, identify_cb);
+
 
 
 	#if defined(CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER)

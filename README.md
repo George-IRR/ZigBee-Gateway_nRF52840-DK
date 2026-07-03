@@ -157,3 +157,9 @@ west twister -T zigbee_end_device/bmp180_device/tests/e2e/ \
              --west-runner nrfutil \
              --inline-logs
 ```
+
+---
+
+## 5. Code Cleanup Log
+For details regarding cleanups, refactoring, and code removals from the original SDK samples, refer to the [Code Cleanup and Removals Log](Docs/code_removals.md).
+

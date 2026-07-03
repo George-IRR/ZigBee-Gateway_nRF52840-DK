@@ -2,9 +2,12 @@ name: PlantUML CI
 
 on:
   push:
+    branches:
+      - main
+      - develop
     paths:
       - 'Docs/*.puml' # Only trigger in Docs
-
+      
 jobs:
   generate:
     runs-on: ubuntu-latest

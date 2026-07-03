@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Absolute paths to build directories
-SWITCH_BUILD="/home/george/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_end_device/light_switch/build_1"
+SWITCH_BUILD="/home/george/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_end_device/bmp180_device/build"
 COORD_BUILD="/home/george/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_network/network_coordinator/build"
 
 # Device IDs
-SWITCH_DEV_ID="1050246989"
-COORD_DEV_ID="1050247285"
+COORD_DEV_ID="1050246989"
+SWITCH_DEV_ID="1050247285"
 
 # Set up toolchain environment variables if nRF Connect toolchain is installed
 TC_DIR="/home/george/ncs/toolchains/b77d8c1312"
@@ -23,7 +23,7 @@ fi
 
 flash_switch() {
     echo "Flashing Light Switch (End Device)..."
-    west flash -d "$SWITCH_BUILD" --domain light_switch --dev-id "$SWITCH_DEV_ID"
+    west flash -d "$SWITCH_BUILD" --domain bmp180_device --dev-id "$SWITCH_DEV_ID"
 }
 
 flash_coordinator() {

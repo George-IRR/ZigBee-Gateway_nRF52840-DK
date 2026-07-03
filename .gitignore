@@ -7,3 +7,5 @@
 # build
 end_device_nrf/build*/
 *.exe
+/twister-out/
+/twister-out.*

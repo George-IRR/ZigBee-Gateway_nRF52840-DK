@@ -1,3 +1,4 @@
+[![Zephyr ZTest Unit Tests](https://github.com/George-IRR/ZigBee-Gateway_nRF52840-DK/actions/workflows/zephyr_unit_tests.yml/badge.svg)](https://github.com/George-IRR/ZigBee-Gateway_nRF52840-DK/actions/workflows/zephyr_unit_tests.yml)
 # Work Plan: Zigbee-Modbus Gateway
 
 ## 1. Architecture and Requirements

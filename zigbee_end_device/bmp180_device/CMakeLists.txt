@@ -10,6 +10,7 @@ target_sources(app PRIVATE
   src/main.c
   src/my_nrf52_timer.c
   src/bmp_180.c
+  src/bmp180_math.c
   src/my_rtc.c
 )
 

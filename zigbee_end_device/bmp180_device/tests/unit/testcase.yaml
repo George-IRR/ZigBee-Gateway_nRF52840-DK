@@ -1,0 +1,4 @@
+tests:
+  bmp180.unit.math:
+    type: unit
+    tags: bmp180 sensor unit

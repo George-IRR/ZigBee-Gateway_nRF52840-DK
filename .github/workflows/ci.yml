@@ -20,6 +20,7 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
+          base: develop
           filters: |
             shared:
               - 'shared_components/**'
@@ -67,7 +68,11 @@ jobs:
     name: Build Firmware
     runs-on: ubuntu-latest
     needs: [detect-changes, run-tests]
-    if: always() && (needs.run-tests.result == 'success' || needs.run-tests.result == 'skipped')
+    # Filter by job level, stop container if there are no relevant changes
+    if: |
+      always() && 
+      (needs.run-tests.result == 'success' || needs.run-tests.result == 'skipped') &&
+      (needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs[matrix.id] == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -93,25 +98,12 @@ jobs:
       image: nordicplayground/nrfconnect-sdk:v2.9-branch
 
     steps:
-      - name: Evaluate Build Necessity
-        id: check
-        run: |
-          SHARED_CHANGED="${{ needs.detect-changes.outputs.shared }}"
-          APP_CHANGED="${{ needs.detect-changes.outputs[matrix.id] }}"
-          if [ "$SHARED_CHANGED" = "true" ] || [ "$APP_CHANGED" = "true" ]; then
-            echo "run_build=true" >> $GITHUB_OUTPUT
-          else
-            echo "run_build=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout Code
-        if: steps.check.outputs.run_build == 'true'
         uses: actions/checkout@v4
         with:
           path: project
 
       - name: Initialize CCache
-        if: steps.check.outputs.run_build == 'true'
         uses: actions/cache@v4
         with:
           path: /root/.cache/ccache
@@ -119,29 +111,19 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.app-path }}-
 
-      - name: Debug Environment
-        if: steps.check.outputs.run_build == 'true'
-        run: |
-          pwd
-          echo "github workspace: ${{ github.workspace }}"
-          ls -la ${{ github.workspace }} || true
-          ls -la /workdir || true
-          find ${{ github.workspace }} -maxdepth 3 || true
-
       - name: Build Firmware (Sysbuild)
-        if: steps.check.outputs.run_build == 'true' && matrix.sysbuild == true
+        if: matrix.sysbuild == true
         run: |
           cd /workdir
           HOME=/root nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s $GITHUB_WORKSPACE/project/${{ matrix.app-path }} -d $GITHUB_WORKSPACE/project/${{ matrix.app-path }}/build --sysbuild
 
       - name: Build Firmware (Standard)
-        if: steps.check.outputs.run_build == 'true' && matrix.sysbuild == false
+        if: matrix.sysbuild == false
         run: |
           cd /workdir
           HOME=/root nrfutil toolchain-manager launch -- west build -b nrf52840dk/nrf52840 -s $GITHUB_WORKSPACE/project/${{ matrix.app-path }} -d $GITHUB_WORKSPACE/project/${{ matrix.app-path }}/build
 
       - name: Upload Build Artifacts
-        if: steps.check.outputs.run_build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app-name }}-firmware

@@ -1,0 +1,21 @@
+name: Zephyr ZTest Unit Tests
+
+on: [push]
+
+jobs:
+  run-zephyr-unit-tests:
+    name: Run Zephyr Unit Tests
+    runs-on: ubuntu-latest
+    container:
+      image: nordicplayground/nrfconnect-sdk:v2.9-branch
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          path: project
+
+      - name: Run ZTest Unit Tests
+        run: |
+          cd /workdir
+          HOME=/root nrfutil toolchain-manager launch -- west twister -T $GITHUB_WORKSPACE/project/zigbee_end_device/bmp180_device/tests/unit/ --inline-logs

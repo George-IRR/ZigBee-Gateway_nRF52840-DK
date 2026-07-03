@@ -9,3 +9,4 @@ end_device_nrf/build*/
 *.exe
 /twister-out/
 /twister-out.*
+/zigbee_end_device/bmp180_device/tests/e2e/pytest/__pycache__/

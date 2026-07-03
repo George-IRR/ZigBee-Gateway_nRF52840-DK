@@ -20,6 +20,12 @@ static bool is_calibrated = false;
 
 int bmp180_init(void)
 {
+#if defined(CONFIG_BMP180_DEVICE_TEST_MODE)
+    LOG_INF("[TEST MODE] Mocked calibration data loaded");
+    is_calibrated = true;
+    return 0;
+#endif
+
     if (!device_is_ready(i2c_dev)) {
         LOG_ERR("I2C device i2c0 not ready");
         return -ENODEV;
@@ -56,6 +62,17 @@ int bmp180_read_temperature(int32_t *temp_out)
     if (temp_out == NULL) {
         return -EINVAL;
     }
+
+#if defined(CONFIG_BMP180_DEVICE_TEST_MODE)
+    static int32_t mock_temp = 200;
+    *temp_out = mock_temp;
+    LOG_INF("[TEST MODE] Mocked temperature: %d.%d C", *temp_out / 10, *temp_out % 10);
+    mock_temp += 5;
+    if (mock_temp > 300) {
+        mock_temp = 200;
+    }
+    return 0;
+#endif
 
     if (!is_calibrated) {
         int ret = bmp180_init();

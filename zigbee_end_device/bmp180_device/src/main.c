@@ -29,8 +29,8 @@
 #include <osif/mac_platform.h>
 #endif
 
-/* Source endpoint used to control light bulb. */
-#define LIGHT_SWITCH_ENDPOINT      1
+/* Source endpoint used to report temperature. */
+#define BMP180_SENSOR_ENDPOINT      1
 
 /* Do not erase NVRAM to save the network parameters after device reboot or
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
@@ -58,7 +58,6 @@ struct zb_device_ctx {
 };
 
 static struct zb_device_ctx dev_ctx;
-static struct zb_device_ctx dev_ctx;
 
 /* Declare attribute list for Basic cluster (server). */
 ZB_ZCL_DECLARE_BASIC_SERVER_ATTRIB_LIST(
@@ -75,8 +74,8 @@ ZB_ZCL_DECLARE_IDENTIFY_SERVER_ATTRIB_LIST(
 	identify_server_attr_list,
 	&dev_ctx.identify_attr.identify_time);
 
-/* Custom cluster list for Dimmer Switch device containing Temp Measurement client cluster */
-zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
+/* Custom cluster list containing Temp Measurement client cluster */
+zb_zcl_cluster_desc_t bmp180_sensor_clusters[] =
 {
 	ZB_ZCL_CLUSTER_DESC(
 		ZB_ZCL_CLUSTER_ID_BASIC,
@@ -108,11 +107,11 @@ zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
 	)
 };
 
-/* Custom simple descriptor for Dimmer Switch with 2 IN and 2 OUT clusters */
+/* Custom simple descriptor with 2 IN and 2 OUT clusters */
 ZB_DECLARE_SIMPLE_DESC(2, 2);
-static ZB_AF_SIMPLE_DESC_TYPE(2, 2) simple_desc_dimmer_switch_ep =
+static ZB_AF_SIMPLE_DESC_TYPE(2, 2) simple_desc_bmp180_ep =
 {
-	LIGHT_SWITCH_ENDPOINT,
+	BMP180_SENSOR_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
 	0x0104, /* ZB_DIMMER_SWITCH_DEVICE_ID */
 	0,      /* ZB_DEVICE_VER_DIMMER_SWITCH */
@@ -129,24 +128,20 @@ static ZB_AF_SIMPLE_DESC_TYPE(2, 2) simple_desc_dimmer_switch_ep =
 
 /* Bind custom cluster list to Endpoint */
 ZB_AF_DECLARE_ENDPOINT_DESC(
-	dimmer_switch_ep,
-	LIGHT_SWITCH_ENDPOINT,
+	bmp180_sensor_ep,
+	BMP180_SENSOR_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
 	0,
 	NULL,
-	ZB_ZCL_ARRAY_SIZE(dimmer_switch_clusters, zb_zcl_cluster_desc_t),
-	dimmer_switch_clusters,
-	(zb_af_simple_desc_1_1_t *)&simple_desc_dimmer_switch_ep,
+	ZB_ZCL_ARRAY_SIZE(bmp180_sensor_clusters, zb_zcl_cluster_desc_t),
+	bmp180_sensor_clusters,
+	(zb_af_simple_desc_1_1_t *)&simple_desc_bmp180_ep,
 	0, NULL,
 	0, NULL
 );
 
-/* Declare application's device context (list of registered endpoints)
- * for Dimmer Switch device.
- */
-ZBOSS_DECLARE_DEVICE_CTX_1_EP(dimmer_switch_ctx, dimmer_switch_ep);
-
-
+/* Declare application's device context (list of registered endpoints) */
+ZBOSS_DECLARE_DEVICE_CTX_1_EP(bmp180_sensor_ctx, bmp180_sensor_ep);
 
 
 /**@brief Starts identifying the device.
@@ -196,7 +191,7 @@ static void send_temperature_cb(zb_bufid_t bufid)
         coord_addr,
         ZB_APS_ADDR_MODE_16_ENDP_PRESENT,
         10, /* ZIGBEE_COORDINATOR_ENDPOINT */
-        LIGHT_SWITCH_ENDPOINT,
+        BMP180_SENSOR_ENDPOINT,
         ZB_AF_HA_PROFILE_ID,
         ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
         write_attr_callback);
@@ -232,8 +227,6 @@ static void configure_gpio(void)
 	}
 }
 
-
-
 /**@brief Function for initializing all clusters attributes. */
 static void app_clusters_attr_init(void)
 {
@@ -244,16 +237,6 @@ static void app_clusters_attr_init(void)
 	/* Identify cluster attributes data. */
 	dev_ctx.identify_attr.identify_time = ZB_ZCL_IDENTIFY_IDENTIFY_TIME_DEFAULT_VALUE;
 }
-
-/**@brief Function for sending ON/OFF requests to the light bulb.
- *
- * @param[in]   bufid    Non-zero reference to Zigbee stack buffer that will be
- *                       used to construct on/off request.
- * @param[in]   cmd_id   ZCL command id.
- */
-
-
-
 
 /**@brief Zigbee stack event handler.
  *
@@ -363,8 +346,8 @@ int main(void)
 		power_down_unused_ram();
 	}
 
-	/* Register dimmer switch device context (endpoints). */
-	ZB_AF_REGISTER_DEVICE_CTX(&dimmer_switch_ctx);
+	/* Register sensor device context (endpoints). */
+	ZB_AF_REGISTER_DEVICE_CTX(&bmp180_sensor_ctx);
 
 	app_clusters_attr_init();
 

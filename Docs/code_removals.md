@@ -38,3 +38,19 @@ The `ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER` macro registers an application cal
 * Bulb transmitter helpers `light_switch_send_on_off()` and `light_switch_send_step()`.
 * Button hold polling logic inside `button_handler()` (simplified to forward factory resets only).
 * Unused timers declaration from `main()`.
+
+---
+
+## 3. Unused Zigbee Clusters (Scenes, Groups, On/Off, Level Control)
+
+### 3.1 What it is
+The original dimmer switch sample declared and registered client clusters for Zigbee Home Automation commands: Scenes client, Groups client, On/Off client, and Level Control client. It also declared and allocated lists of attributes for these clusters.
+
+### 3.2 Why it was removed
+* **Single Responsibility:** The End Device only has a temperature sensor (BMP180) and sends data using the `TEMP_MEASUREMENT` client cluster. It does not control light nodes, organize groups, switch states, or manage lighting levels.
+* **Network & Memory Footprint:** Removing these clusters reduces the Zigbee endpoint configuration complexity and RAM footprint. The Simple Descriptor is downsized from 2 IN and 6 OUT clusters to 2 IN (Basic, Identify) and 2 OUT (Identify client, Temp Measurement client).
+
+### 3.3 Removed Elements
+* Attribute lists `scenes_client_attr_list`, `groups_client_attr_list`, `on_off_client_attr_list`, and `level_control_client_attr_list`.
+* Cluster list entries inside `dimmer_switch_clusters` for scenes, groups, on/off, and level control.
+* Descriptor registration fields inside `simple_desc_dimmer_switch_ep` (changing it from `ZB_DECLARE_SIMPLE_DESC(2, 6)` to `ZB_DECLARE_SIMPLE_DESC(2, 2)`).

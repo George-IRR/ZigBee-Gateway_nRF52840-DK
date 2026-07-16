@@ -105,22 +105,6 @@ ZB_ZCL_DECLARE_IDENTIFY_SERVER_ATTRIB_LIST(
 	identify_server_attr_list,
 	&dev_ctx.identify_attr.identify_time);
 
-/* Declare attribute list for Scenes cluster (client). */
-ZB_ZCL_DECLARE_SCENES_CLIENT_ATTRIB_LIST(
-	scenes_client_attr_list);
-
-/* Declare attribute list for Groups cluster (client). */
-ZB_ZCL_DECLARE_GROUPS_CLIENT_ATTRIB_LIST(
-	groups_client_attr_list);
-
-/* Declare attribute list for On/Off cluster (client). */
-ZB_ZCL_DECLARE_ON_OFF_CLIENT_ATTRIB_LIST(
-	on_off_client_attr_list);
-
-/* Declare attribute list for Level control cluster (client). */
-ZB_ZCL_DECLARE_LEVEL_CONTROL_CLIENT_ATTRIB_LIST(
-	level_control_client_attr_list);
-
 /* Custom cluster list for Dimmer Switch device containing Temp Measurement client cluster */
 zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
 {
@@ -146,34 +130,6 @@ zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
 		ZB_ZCL_MANUF_CODE_INVALID
 	),
 	ZB_ZCL_CLUSTER_DESC(
-		ZB_ZCL_CLUSTER_ID_SCENES,
-		ZB_ZCL_ARRAY_SIZE(scenes_client_attr_list, zb_zcl_attr_t),
-		(scenes_client_attr_list),
-		ZB_ZCL_CLUSTER_CLIENT_ROLE,
-		ZB_ZCL_MANUF_CODE_INVALID
-	),
-	ZB_ZCL_CLUSTER_DESC(
-		ZB_ZCL_CLUSTER_ID_GROUPS,
-		ZB_ZCL_ARRAY_SIZE(groups_client_attr_list, zb_zcl_attr_t),
-		(groups_client_attr_list),
-		ZB_ZCL_CLUSTER_CLIENT_ROLE,
-		ZB_ZCL_MANUF_CODE_INVALID
-	),
-	ZB_ZCL_CLUSTER_DESC(
-		ZB_ZCL_CLUSTER_ID_ON_OFF,
-		ZB_ZCL_ARRAY_SIZE(on_off_client_attr_list, zb_zcl_attr_t),
-		(on_off_client_attr_list),
-		ZB_ZCL_CLUSTER_CLIENT_ROLE,
-		ZB_ZCL_MANUF_CODE_INVALID
-	),
-	ZB_ZCL_CLUSTER_DESC(
-		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
-		ZB_ZCL_ARRAY_SIZE(level_control_client_attr_list, zb_zcl_attr_t),
-		(level_control_client_attr_list),
-		ZB_ZCL_CLUSTER_CLIENT_ROLE,
-		ZB_ZCL_MANUF_CODE_INVALID
-	),
-	ZB_ZCL_CLUSTER_DESC(
 		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
 		0,
 		NULL,
@@ -182,9 +138,9 @@ zb_zcl_cluster_desc_t dimmer_switch_clusters[] =
 	)
 };
 
-/* Custom simple descriptor for Dimmer Switch with 2 IN and 6 OUT clusters */
-ZB_DECLARE_SIMPLE_DESC(2, 6);
-static ZB_AF_SIMPLE_DESC_TYPE(2, 6) simple_desc_dimmer_switch_ep =
+/* Custom simple descriptor for Dimmer Switch with 2 IN and 2 OUT clusters */
+ZB_DECLARE_SIMPLE_DESC(2, 2);
+static ZB_AF_SIMPLE_DESC_TYPE(2, 2) simple_desc_dimmer_switch_ep =
 {
 	LIGHT_SWITCH_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
@@ -192,15 +148,11 @@ static ZB_AF_SIMPLE_DESC_TYPE(2, 6) simple_desc_dimmer_switch_ep =
 	ZB_DEVICE_VER_DIMMER_SWITCH,
 	0,
 	2,
-	6,
+	2,
 	{
 		ZB_ZCL_CLUSTER_ID_BASIC,
 		ZB_ZCL_CLUSTER_ID_IDENTIFY,
 		ZB_ZCL_CLUSTER_ID_IDENTIFY,
-		ZB_ZCL_CLUSTER_ID_SCENES,
-		ZB_ZCL_CLUSTER_ID_GROUPS,
-		ZB_ZCL_CLUSTER_ID_ON_OFF,
-		ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL,
 		ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT
 	}
 };

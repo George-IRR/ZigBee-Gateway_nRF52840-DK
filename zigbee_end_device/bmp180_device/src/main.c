@@ -333,7 +333,7 @@ static void rtc2_isr(const void *arg)
 
 int main(void)
 {
-	LOG_INF("Starting ZBOSS Light Switch example");
+	LOG_INF("Starting ZBOSS BMP180 Temperature Sensor");
 
 
 	/* Initialize. */
@@ -378,7 +378,7 @@ int main(void)
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 
-	LOG_INF("ZBOSS Light Switch example started");
+	LOG_INF("ZBOSS BMP180 Temperature Sensor started");
 
 	if (my_timer_init(MY_TIMER_1, 4) != 0) {
 		LOG_ERR("Failed to initialize TIMER1");

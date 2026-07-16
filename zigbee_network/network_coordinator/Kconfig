@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Nordic Semiconductor ASA
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+
+menu "Zephyr Kernel"
+source "Kconfig.zephyr"
+endmenu
+
+config ZIGBEE_DEVELOPMENT_SECURITY
+	bool "Enable ZBOSS security with a hardcoded static Install Code for development"
+	default y
+	help
+	  When enabled, a pre-defined static EUI64 and Install Code will be registered
+	  automatically at boot, facilitating testing without manual CLI/UART registration.

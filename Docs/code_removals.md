@@ -54,3 +54,20 @@ The original dimmer switch sample declared and registered client clusters for Zi
 * Attribute lists `scenes_client_attr_list`, `groups_client_attr_list`, `on_off_client_attr_list`, and `level_control_client_attr_list`.
 * Cluster list entries inside `dimmer_switch_clusters` for scenes, groups, on/off, and level control.
 * Descriptor registration fields inside `simple_desc_dimmer_switch_ep` (changing it from `ZB_DECLARE_SIMPLE_DESC(2, 6)` to `ZB_DECLARE_SIMPLE_DESC(2, 2)`).
+
+---
+
+## 4. Unused Macros and Constants
+
+### 4.1 What it is
+A collection of unused preprocessor `#define` macros and constants inherited from the original dimmer switch application sample.
+
+### 4.2 Why it was removed
+* **Code Health & Readability:** Cleaning up dead preprocessor macros makes it clear which definitions (like LED mapping, endpoint identifiers, and configs) are actively used by the sensor logic.
+
+### 4.3 Removed Elements
+* `MATCH_DESC_REQ_START_DELAY`, `MATCH_DESC_REQ_TIMEOUT`, and `MATCH_DESC_REQ_ROLE` (finding timers configurations).
+* `BULB_FOUND_LED` (replaced with direct call to `DK_LED4` to indicate successful static steering).
+* `BUTTON_ON`, `BUTTON_OFF`, and `DIMM_STEP` (dimmer switch buttons and step sizes).
+* `IDENTIFY_MODE_BUTTON` (replaced with unified `FACTORY_RESET_BUTTON`).
+* `DIMM_TRANSACTION_TIME` and `BUTTON_LONG_POLL_TMO` (unused dimming transition timers).

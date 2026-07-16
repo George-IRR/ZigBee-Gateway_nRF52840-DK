@@ -20,7 +20,6 @@
 #include <zigbee/zigbee_error_handler.h>
 #include <zb_nrf_platform.h>
 #include "zb_mem_config_custom.h"
-#include "zb_dimmer_switch.h"
 #include "bmp_180.h"
 #include "my_nrf52_timer.h"
 #include "my_rtc.h"
@@ -117,8 +116,8 @@ static ZB_AF_SIMPLE_DESC_TYPE(2, 2) simple_desc_dimmer_switch_ep =
 {
 	LIGHT_SWITCH_ENDPOINT,
 	ZB_AF_HA_PROFILE_ID,
-	ZB_DIMMER_SWITCH_DEVICE_ID,
-	ZB_DEVICE_VER_DIMMER_SWITCH,
+	0x0104, /* ZB_DIMMER_SWITCH_DEVICE_ID */
+	0,      /* ZB_DEVICE_VER_DIMMER_SWITCH */
 	0,
 	2,
 	2,

@@ -39,8 +39,6 @@
 #define ERASE_PERSISTENT_CONFIG    ZB_TRUE
 /* LED indicating that light switch successfully joind Zigbee network. */
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
-/* LED used for device identification. */
-#define IDENTIFY_LED               ZIGBEE_NETWORK_STATE_LED
 
 /* Button ID used to enable sleepy behavior. */
 #define BUTTON_SLEEPY              DK_BTN3_MSK

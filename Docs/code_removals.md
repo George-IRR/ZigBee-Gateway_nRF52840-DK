@@ -71,6 +71,7 @@ A collection of unused preprocessor `#define` macros and constants inherited fro
 * `BUTTON_ON`, `BUTTON_OFF`, and `DIMM_STEP` (dimmer switch buttons and step sizes).
 * `IDENTIFY_MODE_BUTTON` (replaced with unified `FACTORY_RESET_BUTTON`).
 * `DIMM_TRANSACTION_TIME` and `BUTTON_LONG_POLL_TMO` (unused dimming transition timers).
+* `IDENTIFY_LED` (unused after identify notification handler removal).
 
 ---
 

@@ -77,10 +77,11 @@ A collection of unused preprocessor `#define` macros and constants inherited fro
 ## 5. Unused System C Headers and Library Includes
 
 ### 5.1 What it is
-Includes like `<zephyr/random/random.h>` were imported to generate random test payloads in the dimmer switch example, which are no longer needed now that we interface with real sensor drivers.
+Includes like `<zephyr/random/random.h>` and sample-specific headers like `"zb_dimmer_switch.h"` were imported in the dimmer switch example, which are no longer needed now that we interface with real sensor drivers and use customized endpoints.
 
 ### 5.2 Why it was removed
 * **Clean dependency trees:** Minimizing include directives speeds up compiler preprocessing and prevents accidental namespace collision or library bloating.
 
 ### 5.3 Removed Elements
 * `#include <zephyr/random/random.h>` in `main.c`.
+* `#include "zb_dimmer_switch.h"` in `main.c` (constants inlined into the simple descriptor).

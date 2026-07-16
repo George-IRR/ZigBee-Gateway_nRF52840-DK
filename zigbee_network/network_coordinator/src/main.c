@@ -12,6 +12,8 @@
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
 #include <dk_buttons_and_leds.h>
+#include <zephyr/console/console.h>
+#include <string.h>
 
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
@@ -19,9 +21,6 @@
 #include <zigbee/zigbee_error_handler.h>
 #include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
-
-// BMP180
-#include <stdlib.h>
 
 #define RUN_STATUS_LED                         DK_LED1
 #define RUN_LED_BLINK_INTERVAL                 1000
@@ -379,7 +378,7 @@ static void zcl_device_cb(zb_bufid_t bufid)
 
 			LOG_INF("zcl_device_cb - Temperature: %d.%d C (Raw value: %d)", 
 			        temperature_raw / 10, 
-			        abs(temperature_raw % 10), 
+			        (temperature_raw % 10 < 0 ? -(temperature_raw % 10) : (temperature_raw % 10)), 
 			        temperature_raw);
 		}
 	}
@@ -518,10 +517,78 @@ static void modify_attr_value_callback(zb_uint8_t ep, zb_uint16_t cluster_id, zb
 		zb_int16_t temperature_raw = *(zb_int16_t *)value;
 		LOG_INF("modify_attr_value_callback - Temperature: %d.%d C (Raw value: %d)", 
 		        temperature_raw / 10, 
-		        abs(temperature_raw % 10), 
+		        (temperature_raw % 10 < 0 ? -(temperature_raw % 10) : (temperature_raw % 10)), 
 		        temperature_raw);
 	}
 }
+
+static inline zb_uint8_t hex_char_to_val(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+	if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+	return 0;
+}
+
+static inline zb_uint8_t hex_pair_to_byte(const char *hex)
+{
+	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
+}
+
+static void parse_uart_command(char *line)
+{
+	/* Expect: "ic_add 0807060504030201 00112233445566778899aabbccddeeff4278" */
+	if (strncmp(line, "ic_add ", 7) == 0) {
+		const char *ieee_hex = &line[7];
+		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
+
+		// Simple length checks
+		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
+			printk("ic_add_failed: invalid format\n");
+			return;
+		}
+
+		zb_ieee_addr_t addr;
+		for (int i = 0; i < 8; i++) {
+			addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+		}
+
+		zb_uint8_t ic[18];
+		for (int i = 0; i < 18; i++) {
+			ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+		}
+
+		zb_secur_ic_add(addr, ZB_IC_TYPE_128, ic, NULL);
+		printk("ic_add_success: ");
+		for (int i = 0; i < 8; i++) {
+			printk("%02x", addr[7 - i]);
+		}
+		printk("\n");
+	}
+}
+
+#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_PRIORITY 10
+
+static void uart_rx_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	console_getline_init();
+
+	while (1) {
+		char *line = console_getline();
+		if (line) {
+			parse_uart_command(line);
+		}
+	}
+}
+
+K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
+                uart_rx_thread, NULL, NULL, NULL,
+                UART_THREAD_PRIORITY, 0, 0);
 
 int main(void)
 {
@@ -546,6 +613,21 @@ int main(void)
 
 	/* Set modify attribute callback to capture Write Attribute commands */
 	ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB(modify_attr_value_callback);
+
+	/* Enforce Install Code Policy */
+	zb_set_installcode_policy(ZB_TRUE);
+
+	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+	LOG_INF("Registering static development Install Code...");
+	zb_ieee_addr_t dev_ieee_addr = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+	zb_uint8_t dev_install_code[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0x42, 0x78
+	};
+	zb_secur_ic_add(dev_ieee_addr, ZB_IC_TYPE_128, dev_install_code, NULL);
+	LOG_INF("Static development Install Code registered successfully.");
+	#endif
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

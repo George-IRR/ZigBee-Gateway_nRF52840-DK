@@ -163,3 +163,15 @@ west twister -T zigbee_end_device/bmp180_device/tests/e2e/ \
 ## 5. Code Cleanup Log
 For details regarding cleanups, refactoring, and code removals from the original SDK samples, refer to the [Code Cleanup and Removals Log](Docs/code_removals.md).
 
+---
+
+## 6. Future Security Roadmap
+To secure the Zigbee communication and prevent unauthorized joins/sniffing, we plan to implement the following features on the `feature/zigbee-security` branch:
+1. **Permit Joining Control:** Open the commissioning window on the Coordinator only when triggered via button/command, closing it automatically after 180 seconds.
+2. **Install Code Policy (AES-128 TCLK):** Mandate unique pre-shared Install Codes (16-byte key + 2-byte CRC) for joining devices. The Coordinator will reject any device attempting to join using the default global Link Key (`ZigBeeAlliance09`).
+3. **UART Key Registration:** Implement a Coordinator UART CLI command (`ic_add <IEEE> <INSTALL_CODE>`) to register joining credentials dynamically.
+4. **Development Automation:** Support development bypasses/hardcoded keys wrapped in `#if defined(DEVELOPMENT_MODE)` to enable seamless E2E testing without manual interactions.
+
+For detailed changes, design details, and log updates, see the [Security Implementation Log](Docs/security_changes_log.md).
+
+

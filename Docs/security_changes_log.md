@@ -44,16 +44,24 @@ To allow dynamic registration of devices without re-flashing the Coordinator:
 
 ## 3. Development and E2E Test Automation Strategy
 
-To save development time and avoid entering credentials manually every time a device is flashed:
+To save development time and automate testing, we are implementing two key strategies:
 
-### 3.1 Development Mode Bypass
-We will introduce a `#define DEVELOPMENT_MODE` block:
-* **End Device:** Hardcodes its own MAC and Install Code.
-* **Coordinator:** Automatically pre-registers this hardcoded End Device credentials at boot time.
-* This allows simple plug-and-play testing during direct code iterations.
+### 3.1 Development Mode Bypass (Method B)
+We will introduce a Kconfig symbol or preprocessor definition (`CONFIG_ZIGBEE_DEVELOPMENT_SECURITY`):
+* **End Device:** Sets a hardcoded, static Install Code at startup.
+* **Coordinator:** Automatically registers this specific hardcoded EUI64 and Install Code on boot.
+* This allows plug-and-play testing during direct code iterations without requiring any UART commands or external scripts.
 
-### 3.2 Pytest E2E Automation
-For automated CI/CD and regression testing:
-* The Pytest script (`test_e2e.py`) will automatically fetch/generate the test Install Code and EUI64.
-* It will issue the `ic_add` command over the Coordinator's serial port before initiating joining.
-* This completely eliminates manual typing and makes E2E tests runnable on every push.
+### 3.2 Pytest E2E Automation (Method C)
+The automated Pytest E2E test suite (`test_e2e.py`) will test both scenarios:
+
+1. **Development Mode Test (`test_e2e_development_mode`):**
+   * Verifies successful commission and communication when both boards rely on the static development Install Code.
+   * Ensures out-of-the-box security works correctly.
+
+2. **Production Mode Test (`test_e2e_production_mode`):**
+   * Erases persistent configuration/NVRAM on both boards.
+   * Dynamically generates a random EUI64 and random Install Code (calculating the correct CCITT CRC16).
+   * Automatically transmits the `ic_add <EUI64> <INSTALL_CODE>` registration command over the Coordinator's UART port.
+   * Sets the corresponding Install Code on the End Device.
+   * Starts the commission process and verifies the key exchange, network association, and subsequent temperature reports.

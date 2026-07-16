@@ -12,6 +12,8 @@
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
 #include <dk_buttons_and_leds.h>
+#include <zephyr/console/console.h>
+#include <string.h>
 #include <ram_pwrdn.h>
 
 #include <zboss_api.h>
@@ -313,6 +315,82 @@ static void rtc2_isr(const void *arg)
 		k_work_submit(&rtc_work);
 	}
 }
+static inline zb_uint8_t hex_char_to_val(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+	if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+	return 0;
+}
+
+static inline zb_uint8_t hex_pair_to_byte(const char *hex)
+{
+	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
+}
+
+static void parse_uart_command(char *line)
+{
+	if (strncmp(line, "ic_set ", 7) == 0) {
+		const char *ieee_hex = &line[7];
+		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
+
+		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
+			printk("ic_set_failed: invalid format\n");
+			return;
+		}
+
+		zb_ieee_addr_t addr;
+		for (int i = 0; i < 8; i++) {
+			addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+		}
+
+		zb_uint8_t ic[18];
+		for (int i = 0; i < 18; i++) {
+			ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+		}
+
+		zb_set_long_address(addr);
+		zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, ic);
+		if (status == RET_OK) {
+			printk("ic_set_success\n");
+		} else {
+			printk("ic_set_failed: %d\n", status);
+		}
+	} else if (strcmp(line, "join") == 0) {
+		zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+		if (comm_status) {
+			printk("join_started\n");
+		} else {
+			printk("join_failed_busy\n");
+		}
+	} else if (strcmp(line, "factory_reset") == 0) {
+		printk("factory_reset_started\n");
+		ZB_SCHEDULE_APP_CALLBACK(zb_bdb_reset_via_local_action, 0);
+	}
+}
+
+#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_PRIORITY 10
+
+static void uart_rx_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	console_getline_init();
+
+	while (1) {
+		char *line = console_getline();
+		if (line) {
+			parse_uart_command(line);
+		}
+	}
+}
+
+K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
+                uart_rx_thread, NULL, NULL, NULL,
+                UART_THREAD_PRIORITY, 0, 0);
 
 int main(void)
 {

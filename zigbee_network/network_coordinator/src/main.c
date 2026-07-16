@@ -564,6 +564,9 @@ static void parse_uart_command(char *line)
 			printk("%02x", addr[7 - i]);
 		}
 		printk("\n");
+	} else if (strcmp(line, "factory_reset") == 0) {
+		printk("factory_reset_started\n");
+		ZB_SCHEDULE_APP_CALLBACK(zb_bdb_reset_via_local_action, 0);
 	}
 }
 

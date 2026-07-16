@@ -33,12 +33,6 @@
 
 /* Source endpoint used to control light bulb. */
 #define LIGHT_SWITCH_ENDPOINT      1
-/* Delay between the light switch startup and light bulb finding procedure. */
-#define MATCH_DESC_REQ_START_DELAY K_SECONDS(2)
-/* Timeout for finding procedure. */
-#define MATCH_DESC_REQ_TIMEOUT     K_SECONDS(5)
-/* Find only non-sleepy device. */
-#define MATCH_DESC_REQ_ROLE        ZB_NWK_BROADCAST_RX_ON_WHEN_IDLE
 
 /* Do not erase NVRAM to save the network parameters after device reboot or
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
@@ -49,32 +43,12 @@
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
 /* LED used for device identification. */
 #define IDENTIFY_LED               ZIGBEE_NETWORK_STATE_LED
-/* LED indicating that light witch found a light bulb to control. */
-#define BULB_FOUND_LED             DK_LED4
-/* Button ID used to switch on the light bulb. */
-#define BUTTON_ON                  DK_BTN1_MSK
-/* Button ID used to switch off the light bulb. */
-#define BUTTON_OFF                 DK_BTN2_MSK
-/* Dim step size - increases/decreses current level (range 0x000 - 0xfe). */
-#define DIMM_STEP                  15
+
 /* Button ID used to enable sleepy behavior. */
 #define BUTTON_SLEEPY              DK_BTN3_MSK
 
 /* Button to start Factory Reset */
 #define FACTORY_RESET_BUTTON       DK_BTN4_MSK
-
-/* Button used to enter the Identify mode. */
-#define IDENTIFY_MODE_BUTTON       DK_BTN4_MSK
-
-/* Transition time for a single step operation in 0.1 sec units.
- * 0xFFFF - immediate change.
- */
-#define DIMM_TRANSACTION_TIME      2
-
-/* Time after which the button state is checked again to detect button hold,
- * the dimm command is sent again.
- */
-#define BUTTON_LONG_POLL_TMO       K_MSEC(500)
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE to compile light switch (End Device) source code.
@@ -308,16 +282,8 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		if (status == RET_OK) {
-			/* Comment out or delete this block to keep static addressing intact */
-			/*
-			if (bulb_ctx.short_addr == 0xFFFF) {
-				k_timer_start(&bulb_ctx.find_alarm,
-					      MATCH_DESC_REQ_START_DELAY,
-					      MATCH_DESC_REQ_TIMEOUT);
-			}
-			*/
 			LOG_INF("Static addressing to coordinator initialized.");
-			dk_set_led_on(BULB_FOUND_LED);
+			dk_set_led_on(DK_LED4);
 		}
 		break;
 

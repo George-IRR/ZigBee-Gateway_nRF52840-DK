@@ -71,3 +71,16 @@ A collection of unused preprocessor `#define` macros and constants inherited fro
 * `BUTTON_ON`, `BUTTON_OFF`, and `DIMM_STEP` (dimmer switch buttons and step sizes).
 * `IDENTIFY_MODE_BUTTON` (replaced with unified `FACTORY_RESET_BUTTON`).
 * `DIMM_TRANSACTION_TIME` and `BUTTON_LONG_POLL_TMO` (unused dimming transition timers).
+
+---
+
+## 5. Unused System C Headers and Library Includes
+
+### 5.1 What it is
+Includes like `<zephyr/random/random.h>` were imported to generate random test payloads in the dimmer switch example, which are no longer needed now that we interface with real sensor drivers.
+
+### 5.2 Why it was removed
+* **Clean dependency trees:** Minimizing include directives speeds up compiler preprocessing and prevents accidental namespace collision or library bloating.
+
+### 5.3 Removed Elements
+* `#include <zephyr/random/random.h>` in `main.c`.

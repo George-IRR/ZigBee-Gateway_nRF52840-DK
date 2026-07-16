@@ -11,7 +11,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/random/random.h>
 #include <dk_buttons_and_leds.h>
 #include <ram_pwrdn.h>
 

@@ -11,3 +11,10 @@ config BMP180_DEVICE_TEST_MODE
 	help
 	  When enabled, the BMP180 driver will return a sequence of mocked
 	  temperature values instead of reading from the physical sensor via I2C.
+
+config ZIGBEE_DEVELOPMENT_SECURITY
+	bool "Enable ZBOSS security with a hardcoded static Install Code for development"
+	default y
+	help
+	  When enabled, a pre-defined static EUI64 and Install Code will be registered
+	  automatically at boot, facilitating testing without manual CLI/UART registration.

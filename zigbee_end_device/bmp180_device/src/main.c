@@ -358,6 +358,24 @@ int main(void)
 		set_tx_power();
 	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
+	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+	LOG_INF("Configuring development security keys...");
+	zb_ieee_addr_t dev_ieee_addr = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+	zb_set_long_address(dev_ieee_addr);
+
+	zb_uint8_t dev_install_code[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0x42, 0x78
+	};
+	zb_ret_t ic_status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
+	if (ic_status != RET_OK) {
+		LOG_ERR("Failed to set static install code: %d", ic_status);
+	} else {
+		LOG_INF("Static development install code set successfully.");
+	}
+	#endif
+
 	/* Start Zigbee default thread. */
 	zigbee_enable();
 

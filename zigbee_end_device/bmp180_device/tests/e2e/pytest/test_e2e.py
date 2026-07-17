@@ -184,15 +184,6 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
-    # 1. Cleanly disconnect and reconnect to restart the reader thread and fix VCOM issues after flashing
-    try:
-        logger.info("Disconnecting and reconnecting End Device serial connection...")
-        dut.disconnect()
-        time.sleep(1.5)
-        dut.connect()
-        logger.info("End Device serial connection restarted successfully.")
-    except Exception as e:
-        logger.warning(f"Failed to restart serial connection: {e}")
 
     # Wait for End Device to finish boot/reset after serial port opens
     logger.info("Waiting 5s for End Device to finish boot...")

@@ -541,6 +541,7 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 		if (line) {
 			parse_uart_command(line);
 		}
+		k_msleep(20);
 	}
 }
 

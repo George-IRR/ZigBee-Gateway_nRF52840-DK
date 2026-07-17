@@ -253,7 +253,7 @@ static void setup_static_install_code(void)
 	zb_uint8_t dev_install_code[18] = {
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-		0x78, 0x42
+		0xa5, 0x68
 	};
 	zb_ret_t ic_status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
 	if (ic_status != RET_OK) {
@@ -274,15 +274,6 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
 	switch (sig) {
-	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
-	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
-		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
-		setup_static_install_code();
-		#endif
-		/* Call default signal handler. */
-		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
-		break;
-
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -476,6 +467,10 @@ int main(void)
 	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 
+
+	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+	setup_static_install_code();
+	#endif
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();

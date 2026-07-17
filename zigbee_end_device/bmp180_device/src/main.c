@@ -278,6 +278,15 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
 	switch (sig) {
+	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
+	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
+		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+		setup_static_install_code();
+		#endif
+		/* Call default signal handler. */
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		break;
+
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -471,10 +480,6 @@ int main(void)
 	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
 
-
-	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
-	setup_static_install_code();
-	#endif
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();

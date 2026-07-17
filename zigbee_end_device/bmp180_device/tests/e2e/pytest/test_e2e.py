@@ -211,7 +211,7 @@ def test_e2e_security(dut: DeviceAdapter):
     dut.write(b"join\n")
     
     # Wait for association and initial reports
-    time.sleep(25)
+    time.sleep(12)
     collect_device_logs()
     
     # Verify Scenario 1 Assertions:
@@ -239,7 +239,7 @@ def test_e2e_security(dut: DeviceAdapter):
     # 1. Soft reboot End Device via console command
     logger.info("Rebooting End Device...")
     dut.write(b"reboot\n")
-    time.sleep(15)
+    time.sleep(6)
     collect_device_logs()
     
     # Verify Scenario 3 Assertions:
@@ -271,7 +271,7 @@ def test_e2e_security(dut: DeviceAdapter):
     
     ed_logs.clear()
     coord_logs.clear()
-    time.sleep(12)
+    time.sleep(6)
     
     # Reopen Coordinator port
     coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
@@ -291,12 +291,12 @@ def test_e2e_security(dut: DeviceAdapter):
     
     logger.info("Setting Install Code on End Device via UART...")
     dut.write(f"ic_set {real_mac_hex} {ic_hex}\n".encode())
-    time.sleep(2)
+    time.sleep(1)
     collect_device_logs()
     
     logger.info("Triggering join on End Device (Unauthorized Join Attempt)...")
     dut.write(b"join\n")
-    time.sleep(20)
+    time.sleep(8)
     collect_device_logs()
     
     # Verify Scenario 2 Assertions:
@@ -320,13 +320,13 @@ def test_e2e_security(dut: DeviceAdapter):
     # 1. Register the correct Install Code on Coordinator to allow successful pairing
     logger.info("Registering Install Code on Coordinator via UART...")
     coord_ser.write(f"ic_add {real_mac_hex} {ic_hex}\n".encode())
-    time.sleep(2)
+    time.sleep(1)
     collect_device_logs()
     
     # 2. Trigger join on End Device
     logger.info("Triggering join on End Device (Authorized Join)...")
     dut.write(b"join\n")
-    time.sleep(25)
+    time.sleep(12)
     collect_device_logs()
     
     # Verify Scenario 4 Assertions:

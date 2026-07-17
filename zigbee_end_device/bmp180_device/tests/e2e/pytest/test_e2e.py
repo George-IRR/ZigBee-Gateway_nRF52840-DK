@@ -164,31 +164,16 @@ def test_e2e_security(dut: DeviceAdapter):
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
-    time.sleep(8)
+    time.sleep(12)
     
     coord_ser.reset_input_buffer()
     
     # 2. Get End Device real MAC
     real_mac_hex = get_end_device_mac(dut)
     
-    # 3. Dynamic register development key on Coordinator (to support any hardware/CI)
-    logger.info(f"Pre-registering development Install Code for EUI64 {real_mac_hex} on Coordinator...")
-    coord_ser.write(f"ic_add {real_mac_hex} ffeeddccbbaa99887766554433221100520d\n".encode())
-    
-    success_found = False
-    start_wait = time.time()
-    while time.time() - start_wait < 5:
-        if coord_ser.in_waiting > 0:
-            line = coord_ser.readline().decode('utf-8', errors='ignore').strip()
-            if "ic_add_success" in line:
-                logger.info("Coordinator registered development key successfully!")
-                success_found = True
-                break
-        time.sleep(0.05)
-        
-    # 4. Trigger steering on End Device
+    # 3. Trigger steering on End Device
     logger.info("Triggering join steering on End Device...")
-    time.sleep(8.0) # Wait for automatic boot steering to fail so stack is idle
+    time.sleep(2.0) # Ensure initial boot steering has failed and stack is fully idle
     dut.write(b"join\n")
     
     # 5. Verify communication

@@ -184,7 +184,12 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
-    # 1. Query the End Device IEEE Address via UART command (retry loop to handle boot timing)
+    # 1. Wait for End Device to finish boot/reset after serial port opens
+    logger.info("Waiting 5s for End Device to finish boot...")
+    time.sleep(5.0)
+    collect_device_logs()
+
+    # Query the End Device IEEE Address via UART command
     real_mac_hex = None
     for attempt in range(5):
         logger.info(f"Querying IEEE address (attempt {attempt + 1}/5)...")

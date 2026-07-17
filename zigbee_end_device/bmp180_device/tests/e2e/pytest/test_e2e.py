@@ -5,6 +5,7 @@ import logging
 import subprocess
 import pytest
 import serial
+import random
 from pathlib import Path
 from twister_harness import DeviceAdapter
 
@@ -64,51 +65,50 @@ def get_serial_ports():
                     devices[current_dev].append(port_path)
     return devices
 
-def test_e2e_communication(dut: DeviceAdapter):
-    """
-    End-to-End ZigBee Communication Test:
-    - End Device (flashed automatically by Twister, accessed via 'dut')
-    - Coordinator (pre-flashed or running, accessed via serial port dynamically discovered)
-    
-    Verifies that the mocked temperature values sent by the End Device over Zigbee
-    are correctly received and logged by the Coordinator.
-    """
-    switch_id, coord_id = get_dev_ids_from_config()
-    logger.info(f"Looking for Switch (ED) ID: {switch_id}, Coordinator ID: {coord_id}")
-    
-    ports = get_serial_ports()
-    if coord_id not in ports or not ports[coord_id]:
-        pytest.fail(f"Coordinator device {coord_id} not found in connected ports.")
-        
-    coord_port = ports[coord_id][0] # use vcom 0
-    logger.info(f"Coordinator port found: {coord_port}")
-    
-    # Open Coordinator UART connection
-    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
-    coord_ser.reset_input_buffer()
-    
-    # Track sent and received mocked temperatures
+def crc16_ccitt(data: bytes) -> int:
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= (byte << 8)
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
+            else:
+                crc = crc << 1
+            crc &= 0xFFFF
+    return crc
+
+def get_end_device_mac(dut: DeviceAdapter, timeout: int = 15) -> str:
+    start_time = time.time()
+    logger.info("Waiting for End Device to report its IEEE address...")
+    while time.time() - start_time < timeout:
+        line = dut.readline()
+        if line:
+            line_str = line.strip()
+            m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line_str)
+            if m:
+                mac_addr = m.group(1).lower()
+                logger.info(f"Detected End Device MAC: {mac_addr}")
+                return mac_addr
+        time.sleep(0.05)
+    raise RuntimeError("Failed to detect End Device IEEE Address from boot logs.")
+
+def verify_communication(dut: DeviceAdapter, coord_ser: serial.Serial, timeout: int = 90):
     sent_temperatures = []
     received_temperatures = []
-    
     start_time = time.time()
-    timeout = 90  # 90 seconds timeout for network join & 2-3 reports
-    
-    logger.info("Starting monitoring of End Device and Coordinator logs...")
     
     while time.time() - start_time < timeout:
-        # Read from End Device (via Twister's device adapter)
+        # Read from End Device
         ed_line = dut.readline()
         if ed_line:
             ed_line_str = ed_line.strip()
-            # Look for: "[TEST MODE] Mocked temperature: 20.0 C"
             m = re.search(r'Mocked temperature:\s*([0-9.-]+)\s*C', ed_line_str)
             if m:
                 temp_val = float(m.group(1))
                 logger.info(f"[End Device UART] Sent Mock Temperature: {temp_val} C")
                 sent_temperatures.append(temp_val)
         
-        # Read from Coordinator (via PySerial)
+        # Read from Coordinator
         if coord_ser.in_waiting > 0:
             coord_line = coord_ser.readline()
             try:
@@ -116,26 +116,147 @@ def test_e2e_communication(dut: DeviceAdapter):
             except Exception:
                 coord_line_str = ""
             if coord_line_str:
-                # Look for: "zcl_device_cb - Temperature: 20.0 C" or similar
                 m = re.search(r'Temperature:\s*([0-9.-]+)\s*C', coord_line_str)
                 if m:
                     temp_val = float(m.group(1))
                     logger.info(f"[Coordinator UART] Received Temperature: {temp_val} C")
                     received_temperatures.append(temp_val)
                     
-        # Check if we have successfully matched at least 2 consecutive values
-        matched_values = []
-        for t in sent_temperatures:
-            if t in received_temperatures:
-                matched_values.append(t)
-                
+        # Check if we have successfully matched at least 2 values
+        matched_values = [t for t in sent_temperatures if t in received_temperatures]
         if len(matched_values) >= 2:
-            logger.info(f"SUCCESS: Matched temperature values {matched_values} between End Device and Coordinator!")
-            coord_ser.close()
-            return
+            logger.info(f"SUCCESS: Matched temperature values {matched_values}!")
+            return True
             
         time.sleep(0.01)
         
+    logger.error(f"Timeout waiting for communication. Sent: {sent_temperatures}, Received: {received_temperatures}")
+    return False
+
+def test_e2e_development_mode(dut: DeviceAdapter):
+    """
+    Test Case 1: Development Mode Security
+    - Both boards utilize the static development Install Code out-of-the-box.
+    """
+    switch_id, coord_id = get_dev_ids_from_config()
+    ports = get_serial_ports()
+    if coord_id not in ports or not ports[coord_id]:
+        pytest.fail(f"Coordinator device {coord_id} not found in connected ports.")
+        
+    coord_port = ports[coord_id][0]
+    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
+    coord_ser.reset_input_buffer()
+    
+    # 1. Reset both to start fresh
+    logger.info("Performing factory reset on Coordinator and End Device...")
+    coord_ser.write(b"factory_reset\n")
+    dut.write(b"factory_reset\n")
+    time.sleep(8)
+    
+    coord_ser.reset_input_buffer()
+    
+    # 2. Detect End Device real MAC address
+    real_mac_hex = get_end_device_mac(dut)
+    
+    # 3. Dynamic register development key on Coordinator (to support any hardware/CI)
+    logger.info(f"Pre-registering development Install Code for EUI64 {real_mac_hex} on Coordinator...")
+    coord_ser.write(f"ic_add {real_mac_hex} 00112233445566778899aabbccddeeff4278\n".encode())
+    
+    # Verify success registration log on Coordinator
+    success_found = False
+    start_wait = time.time()
+    while time.time() - start_wait < 5:
+        if coord_ser.in_waiting > 0:
+            line = coord_ser.readline().decode('utf-8', errors='ignore').strip()
+            if "ic_add_success" in line:
+                logger.info("Coordinator registered development key successfully!")
+                success_found = True
+                break
+        time.sleep(0.05)
+        
+    # 4. Trigger steering on End Device
+    logger.info("Triggering join steering on End Device...")
+    dut.write(b"join\n")
+    
+    # 5. Verify communication
+    success = verify_communication(dut, coord_ser, timeout=60)
     coord_ser.close()
-    logger.error(f"E2E Test Timeout. Sent: {sent_temperatures}, Received: {received_temperatures}")
-    pytest.fail("E2E Test Failed: Did not match at least 2 mocked temperature transmissions within timeout.")
+    
+    if not success:
+        pytest.fail("E2E Development Mode Test Failed: Communication check timed out.")
+
+def test_e2e_production_mode(dut: DeviceAdapter):
+    """
+    Test Case 2: Production Mode Security
+    - Dynamically registers a random Install Code to the Coordinator over UART.
+    - Sets the key on the End Device over UART.
+    - Triggers steering and verifies communication.
+    """
+    switch_id, coord_id = get_dev_ids_from_config()
+    ports = get_serial_ports()
+    if coord_id not in ports or not ports[coord_id]:
+        pytest.fail(f"Coordinator device {coord_id} not found in connected ports.")
+        
+    coord_port = ports[coord_id][0]
+    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
+    coord_ser.reset_input_buffer()
+    
+    # 1. Reset both to start fresh
+    logger.info("Performing factory reset on Coordinator and End Device...")
+    coord_ser.write(b"factory_reset\n")
+    dut.write(b"factory_reset\n")
+    time.sleep(8)
+    
+    coord_ser.reset_input_buffer()
+    
+    # 2. Get End Device real MAC
+    real_mac_hex = get_end_device_mac(dut)
+    
+    # 3. Generate a random Install Code (16 bytes key + 2 bytes CRC)
+    ic_key_bytes = bytes([random.randint(0x00, 0xFF) for _ in range(16)])
+    crc_val = crc16_ccitt(ic_key_bytes)
+    crc_bytes = bytes([crc_val & 0xFF, (crc_val >> 8) & 0xFF])
+    ic_bytes = ic_key_bytes + crc_bytes
+    ic_hex = ic_bytes.hex()
+    
+    logger.info(f"Dynamic MAC: {real_mac_hex}, Install Code: {ic_hex}")
+    
+    # 4. Register Install Code on Coordinator via UART
+    logger.info("Registering Install Code on Coordinator via UART...")
+    coord_ser.write(f"ic_add {real_mac_hex} {ic_hex}\n".encode())
+    
+    success_found = False
+    start_wait = time.time()
+    while time.time() - start_wait < 5:
+        if coord_ser.in_waiting > 0:
+            line = coord_ser.readline().decode('utf-8', errors='ignore').strip()
+            if "ic_add_success" in line:
+                logger.info("Coordinator registered key successfully!")
+                success_found = True
+                break
+        time.sleep(0.05)
+        
+    # 5. Set Install Code on End Device via UART
+    logger.info("Setting Install Code on End Device via UART...")
+    dut.write(f"ic_set {real_mac_hex} {ic_hex}\n".encode())
+    
+    ed_success = False
+    start_wait = time.time()
+    while time.time() - start_wait < 5:
+        line = dut.readline()
+        if line and "ic_set_success" in line:
+            logger.info("End Device set key successfully!")
+            ed_success = True
+            break
+        time.sleep(0.05)
+        
+    # 6. Trigger steering on End Device
+    logger.info("Triggering join steering on End Device...")
+    dut.write(b"join\n")
+    
+    # 7. Verify communication
+    success = verify_communication(dut, coord_ser, timeout=60)
+    coord_ser.close()
+    
+    if not success:
+        pytest.fail("E2E Production Mode Test Failed: Communication check timed out.")

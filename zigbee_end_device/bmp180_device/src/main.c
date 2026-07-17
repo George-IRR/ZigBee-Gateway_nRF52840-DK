@@ -526,7 +526,7 @@ static void parse_uart_command(char *line)
 	}
 }
 
-#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_STACK_SIZE 2048
 #define UART_THREAD_PRIORITY 10
 
 static void uart_rx_thread(void *p1, void *p2, void *p3)

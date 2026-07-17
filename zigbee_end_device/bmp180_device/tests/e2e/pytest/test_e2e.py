@@ -184,7 +184,19 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
-    # 1. Wait for End Device to finish boot/reset after serial port opens
+    # 1. Close and reopen the End Device J-Link serial port to restore a fresh connection after flashing
+    if hasattr(dut, '_serial_connection') and dut._serial_connection:
+        try:
+            logger.info("Reconnecting End Device serial port VCOM...")
+            dut._serial_connection.close()
+            time.sleep(1.5)
+            dut._serial_connection.open()
+            dut._serial_connection.reset_input_buffer()
+            logger.info("End Device serial port VCOM reconnected successfully.")
+        except Exception as e:
+            logger.warning(f"Failed to reconnect End Device serial port: {e}")
+
+    # Wait for End Device to finish boot/reset after serial port opens
     logger.info("Waiting 5s for End Device to finish boot...")
     time.sleep(5.0)
     collect_device_logs()

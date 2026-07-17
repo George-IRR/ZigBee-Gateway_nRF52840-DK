@@ -6,6 +6,7 @@ import subprocess
 import pytest
 import serial
 import random
+from pathlib import Path
 from twister_harness import DeviceAdapter
 from twister_harness.exceptions import TwisterHarnessTimeoutException
 

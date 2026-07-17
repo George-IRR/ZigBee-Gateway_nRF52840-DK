@@ -188,7 +188,7 @@ def test_e2e_security(dut: DeviceAdapter):
         
     # 4. Trigger steering on End Device
     logger.info("Triggering join steering on End Device...")
-    time.sleep(5.0) # Wait for any automatic steering at boot to finish
+    time.sleep(8.0) # Wait for automatic boot steering to fail so stack is idle
     dut.write(b"join\n")
     
     # 5. Verify communication
@@ -206,7 +206,7 @@ def test_e2e_security(dut: DeviceAdapter):
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
-    time.sleep(8)
+    time.sleep(12)
     
     coord_ser.reset_input_buffer()
     

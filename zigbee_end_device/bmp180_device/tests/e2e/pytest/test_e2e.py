@@ -184,22 +184,8 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
-    # 1. Reset both to start fresh
-    logger.info("Performing factory reset on Coordinator and End Device...")
-    coord_ser.write(b"factory_reset\n")
-    dut.write(b"factory_reset\n")
-    
-    # Close Coordinator port during reboot to prevent SerialException
-    coord_ser.close()
-    
-    # Let them reboot and initialize (background thread collects End Device output)
-    time.sleep(12)
-    
-    # Reopen Coordinator port
-    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
-    coord_ser.reset_input_buffer()
-    
-    # Collect all boot logs
+    # 1. Collect all boot logs printed after flashing
+    time.sleep(2.0)
     collect_device_logs()
     
     # 2. Get End Device MAC

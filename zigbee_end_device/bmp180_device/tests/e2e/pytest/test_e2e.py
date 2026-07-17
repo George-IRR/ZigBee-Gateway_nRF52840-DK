@@ -174,10 +174,10 @@ def test_e2e_security(dut: DeviceAdapter):
                     ed_logs.append(line_str)
             except TwisterHarnessTimeoutException:
                 pass
-            # Coordinator
-            if coord_ser.in_waiting > 0:
-                line_c = coord_ser.readline()
+            # Coordinator (only read if port is open)
+            if coord_ser and coord_ser.is_open and coord_ser.in_waiting > 0:
                 try:
+                    line_c = coord_ser.readline()
                     line_c_str = line_c.decode('utf-8', errors='ignore').strip()
                     logger.info(f"[Coordinator] {line_c_str}")
                     coord_logs.append(line_c_str)
@@ -194,8 +194,13 @@ def test_e2e_security(dut: DeviceAdapter):
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
+    
+    # Close Coordinator port during reboot to prevent SerialException
+    coord_ser.close()
     collect_logs(12)
     
+    # Reopen Coordinator port
+    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
     coord_ser.reset_input_buffer()
     
     # 2. Get End Device MAC
@@ -260,7 +265,7 @@ def test_e2e_security(dut: DeviceAdapter):
     # A. Secure rejoin request/completion log check (status 1 is rejoin)
     rejoin_found = any("Device update received" in l and "status: 1" in l for l in coord_logs) or \
                    any("rejoined" in l.lower() for l in coord_logs)
-    # B. Bypassed initial key exchange (no "Static development install code set" after boot for join)
+    # B. Bypassed initial key exchange (no new key exchange logic ran)
     no_new_key_exchange = not any("Setting static development install code" in l for l in ed_logs)
     
     logger.info(f"Scenario 3 - Secure Rejoin detected: {rejoin_found}")
@@ -279,9 +284,17 @@ def test_e2e_security(dut: DeviceAdapter):
     logger.info("Performing factory reset to enter Production Mode (clearing keys)...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
+    
+    # Close Coordinator port during reboot to prevent SerialException
+    coord_ser.close()
+    
     ed_logs.clear()
     coord_logs.clear()
     collect_logs(12)
+    
+    # Reopen Coordinator port
+    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
+    coord_ser.reset_input_buffer()
     
     # 2. Set Install Code on End Device, but do NOT register it on Coordinator (Simulate Rogue)
     ic_key_bytes = bytes([random.randint(0x00, 0xFF) for _ in range(16)])

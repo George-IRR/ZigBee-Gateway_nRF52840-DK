@@ -490,6 +490,7 @@ static void reboot_handler(zb_bufid_t bufid)
 
 static void parse_uart_command(char *line)
 {
+	printk("Parsed UART Command: '%s'\n", line);
 	if (strncmp(line, "ic_set ", 7) == 0) {
 		const char *ieee_hex = &line[7];
 		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
@@ -534,7 +535,9 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
+	printk("UART RX Thread: Initializing console...\n");
 	console_getline_init();
+	printk("UART RX Thread: Console initialized successfully.\n");
 
 	while (1) {
 		char *line = console_getline();

@@ -184,31 +184,23 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
-    # 1. Collect all boot logs printed after flashing
+    # 1. Query the End Device IEEE Address via UART command
     time.sleep(2.0)
+    dut.write(b"ieee\n")
+    time.sleep(1.0)
     collect_device_logs()
     
-    # 2. Get End Device MAC
+    # 2. Get End Device MAC from the queried response
     real_mac_hex = None
     for line in ed_logs:
         m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line)
         if m:
             real_mac_hex = m.group(1).lower()
             break
-            
-    if not real_mac_hex:
-        # Wait a bit more and check
-        time.sleep(3)
-        collect_device_logs()
-        for line in ed_logs:
-            m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line)
-            if m:
-                real_mac_hex = m.group(1).lower()
-                break
                 
     if not real_mac_hex:
         coord_ser.close()
-        pytest.fail("Failed to detect End Device IEEE Address from boot logs.")
+        pytest.fail("Failed to detect End Device IEEE Address via UART query.")
         
     logger.info(f"Detected End Device MAC: {real_mac_hex}")
     

@@ -1,9 +1,23 @@
 #!/bin/bash
+# flash_devices.sh — Build and flash End Device / Coordinator
+# Usage:
+#   ./flash_devices.sh <target> [--dev|--prod]
+#
+#   target:  switch | coord | all
+#   mode:    --dev   → CONFIG_ZIGBEE_DEVELOPMENT_SECURITY=y  (default, auto-join with static key)
+#            --prod  → CONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n  (manual UART pairing required)
+#
+# Examples:
+#   ./flash_devices.sh all           # build+flash both in dev mode
+#   ./flash_devices.sh all --prod    # build+flash both in production mode
+#   ./flash_devices.sh coord --prod  # build+flash only coordinator in prod mode
+#   ./flash_devices.sh switch --dev  # build+flash only end device in dev mode
 
-# Get script directory to make paths relative
+set -e
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load configurations from config.env
+# ── Load config.env ────────────────────────────────────────────────────────────
 if [ -f "$SCRIPT_DIR/config.env" ]; then
     source "$SCRIPT_DIR/config.env"
 else
@@ -11,13 +25,10 @@ else
     SWITCH_DEV_ID="1050247285"
     COORD_DEV_ID="1050246989"
     NCS_TOOLCHAIN_DIR="/home/george/ncs/toolchains/b77d8c1312"
+    NCS_VERSION_DIR="/home/george/ncs/v2.9.2"
 fi
 
-# Paths to build directories
-SWITCH_BUILD="$SCRIPT_DIR/zigbee_end_device/bmp180_device/build"
-COORD_BUILD="$SCRIPT_DIR/zigbee_network/network_coordinator/build"
-
-# Set up toolchain environment variables
+# ── Toolchain env ──────────────────────────────────────────────────────────────
 TC_DIR="$NCS_TOOLCHAIN_DIR"
 if [ -d "$TC_DIR" ]; then
     export PATH="$TC_DIR/bin:$TC_DIR/usr/bin:$TC_DIR/usr/local/bin:$TC_DIR/opt/bin:$TC_DIR/opt/nanopb/generator-bin:$TC_DIR/opt/zephyr-sdk/arm-zephyr-eabi/bin:$TC_DIR/opt/zephyr-sdk/riscv64-zephyr-elf/bin:$PATH"
@@ -30,33 +41,133 @@ if [ -d "$TC_DIR" ]; then
     export ZEPHYR_SDK_INSTALL_DIR="$TC_DIR/opt/zephyr-sdk"
 fi
 
-flash_switch() {
-    echo "Flashing Light Switch (End Device, ID: $SWITCH_DEV_ID)..."
-    west flash -d "$SWITCH_BUILD" --domain bmp180_device --dev-id "$SWITCH_DEV_ID"
-}
+NCS_DIR="${NCS_VERSION_DIR:-/home/george/ncs/v2.9.2}"
 
-flash_coordinator() {
-    echo "Flashing Network Coordinator (ID: $COORD_DEV_ID)..."
-    west flash -d "$COORD_BUILD" --domain network_coordinator --dev-id "$COORD_DEV_ID"
-}
+SWITCH_SRC="$SCRIPT_DIR/zigbee_end_device/bmp180_device"
+COORD_SRC="$SCRIPT_DIR/zigbee_network/network_coordinator"
+SWITCH_BUILD="$SWITCH_SRC/build"
+COORD_BUILD="$COORD_SRC/build"
 
-case "$1" in
-    switch|end_device)
-        flash_switch
+# ── Parse arguments ────────────────────────────────────────────────────────────
+TARGET="$1"
+MODE_FLAG="${2:---dev}"   # default to --dev
+
+case "$MODE_FLAG" in
+    --prod|--production)
+        SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n"
+        MODE_LABEL="PRODUCTION (manual UART pairing)"
         ;;
-    coord|coordinator)
-        flash_coordinator
-        ;;
-    all)
-        flash_coordinator &
-        flash_switch &
-        wait
+    --dev|--development|"")
+        SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=y"
+        MODE_LABEL="DEVELOPMENT (auto-join with static key)"
         ;;
     *)
-        echo "Usage: $0 {switch|coord|all}"
-        echo "  switch      - Flash the Light Switch end device"
-        echo "  coord       - Flash the Network Coordinator"
-        echo "  all         - Flash both devices in parallel"
+        echo "Unknown mode: $MODE_FLAG. Use --dev or --prod."
+        exit 1
+        ;;
+esac
+
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  Mode: $MODE_LABEL"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
+
+# ── Build + Flash functions ────────────────────────────────────────────────────
+build_switch() {
+    echo "► Building End Device ($MODE_LABEL)..."
+    cd "$NCS_DIR"
+    west build -b nrf52840dk/nrf52840 \
+        -s "$SWITCH_SRC" \
+        -d "$SWITCH_BUILD" \
+        -- "$SECURITY_KCONFIG"
+    echo "✓ End Device built."
+}
+
+flash_switch() {
+    echo "► Flashing End Device (ID: $SWITCH_DEV_ID)..."
+    west flash -d "$SWITCH_BUILD" --domain bmp180_device \
+        --dev-id "$SWITCH_DEV_ID" --runner nrfutil
+    echo "✓ End Device flashed."
+}
+
+build_coord() {
+    echo "► Building Coordinator ($MODE_LABEL)..."
+    cd "$NCS_DIR"
+    west build -b nrf52840dk/nrf52840 \
+        -s "$COORD_SRC" \
+        -d "$COORD_BUILD" \
+        -- "$SECURITY_KCONFIG"
+    echo "✓ Coordinator built."
+}
+
+flash_coord() {
+    echo "► Flashing Coordinator (ID: $COORD_DEV_ID)..."
+    west flash -d "$COORD_BUILD" --domain network_coordinator \
+        --dev-id "$COORD_DEV_ID" --runner nrfutil
+    echo "✓ Coordinator flashed."
+}
+
+# ── Production mode reminder ───────────────────────────────────────────────────
+prod_reminder() {
+    if [ "$MODE_FLAG" = "--prod" ] || [ "$MODE_FLAG" = "--production" ]; then
+        echo ""
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║  PRODUCTION MODE — Manual Pairing Required           ║"
+        echo "║                                                      ║"
+        echo "║  1. Read End Device IEEE address from its log        ║"
+        echo "║  2. Coordinator (/dev/ttyACM0):                      ║"
+        echo "║       ic_add <IEEE_HEX> <IC_36HEX>                   ║"
+        echo "║     → responds: ic_add_success + steering_started    ║"
+        echo "║  3. End Device (/dev/ttyACM2):                       ║"
+        echo "║       ic_set <IEEE_HEX> <IC_36HEX>                   ║"
+        echo "║     → responds: ic_set_success                       ║"
+        echo "║  4. End Device: join                                  ║"
+        echo "║     → responds: Joined network successfully           ║"
+        echo "║                                                      ║"
+        echo "║  Full guide: Docs/production_pairing_guide.md        ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo ""
+    fi
+}
+
+# ── Main dispatch ──────────────────────────────────────────────────────────────
+case "$TARGET" in
+    switch|end_device)
+        build_switch
+        flash_switch
+        prod_reminder
+        ;;
+    coord|coordinator)
+        build_coord
+        flash_coord
+        prod_reminder
+        ;;
+    all)
+        # Build sequentially (west is not parallel-safe), flash in parallel
+        build_coord
+        build_switch
+        flash_coord &
+        flash_switch &
+        wait
+        prod_reminder
+        ;;
+    *)
+        echo "Usage: $0 {switch|coord|all} [--dev|--prod]"
+        echo ""
+        echo "  Targets:"
+        echo "    switch      Flash the End Device (BMP180 sensor)"
+        echo "    coord       Flash the Network Coordinator"
+        echo "    all         Build and flash both devices"
+        echo ""
+        echo "  Modes:"
+        echo "    --dev       Development mode: auto-join with static key (default)"
+        echo "    --prod      Production mode: manual UART pairing required"
+        echo ""
+        echo "Examples:"
+        echo "  ./flash_devices.sh all           # dev mode (default)"
+        echo "  ./flash_devices.sh all --prod    # production mode"
+        echo "  ./flash_devices.sh coord --prod  # only coordinator, prod mode"
         exit 1
         ;;
 esac

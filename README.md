@@ -144,18 +144,17 @@ west twister -T zigbee_end_device/bmp180_device/tests/integration/ \
              --west-runner nrfutil
 ```
 
-#### 3. End-to-End Tests (Zigbee Network - Dual Hardware)
-Validates that the mocked temperature values sent by the End Device over Zigbee are received and logged by the Network Coordinator. The PC acts as the middleman monitoring both serial UART channels:
+#### 3. End-to-End (E2E) Security Tests (Zigbee Network - Dual Hardware)
+Validates Zigbee 3.0 security joining procedures under both Development (static pre-shared key) and Production (dynamic randomized key via UART) modes. Pytest acts as the test coordinator communicating with both devices:
 ```bash
 source config.env
 west twister -T zigbee_end_device/bmp180_device/tests/e2e/ \
              -p nrf52840dk/nrf52840 \
              --device-testing \
-             --device-serial /dev/ttyACM0 \
-             --device-serial-baud 115200 \
-             --west-flash="--dev-id=$SWITCH_DEV_ID" \
+             --device-serial /dev/ttyACM2 \
              --west-runner nrfutil \
-             --inline-logs
+             --west-flash="--dev-id=$SWITCH_DEV_ID" \
+             -O /home/george/ncs/v2.9.2/twister-out.6
 ```
 
 ---
@@ -165,13 +164,13 @@ For details regarding cleanups, refactoring, and code removals from the original
 
 ---
 
-## 6. Future Security Roadmap
-To secure the Zigbee communication and prevent unauthorized joins/sniffing, we plan to implement the following features on the `feature/zigbee-security` branch:
-1. **Permit Joining Control:** Open the commissioning window on the Coordinator only when triggered via button/command, closing it automatically after 180 seconds.
-2. **Install Code Policy (AES-128 TCLK):** Mandate unique pre-shared Install Codes (16-byte key + 2-byte CRC) for joining devices. The Coordinator will reject any device attempting to join using the default global Link Key (`ZigBeeAlliance09`).
-3. **UART Key Registration:** Implement a Coordinator UART CLI command (`ic_add <IEEE> <INSTALL_CODE>`) to register joining credentials dynamically.
-4. **Development Automation:** Support development bypasses/hardcoded keys wrapped in `#if defined(DEVELOPMENT_MODE)` to enable seamless E2E testing without manual interactions.
+## 6. Zigbee 3.0 Security Features Implemented
+We have successfully implemented and verified the following security mechanisms:
+1. **Permit Joining Control:** Joining window closes automatically after 180 seconds and is only opened when steering is explicitly triggered.
+2. **Install Code Policy (AES-128 TCLK):** Mandates unique pre-shared Install Codes. The Coordinator rejects any device attempting to join using the default global Link Key, requiring a Trust Center Link Key update derived from the Install Code.
+3. **Thread-Safe UART Key Registration:** Implemented `ic_add` and `ic_set` CLI console commands executed safely on the ZBOSS stack thread via `ZB_SCHEDULE_APP_CALLBACK`.
+4. **Development Automation:** Enabled a Kconfig option (`CONFIG_ZIGBEE_DEVELOPMENT_SECURITY`) for static key pairing bypass in development.
 
-For detailed changes, design details, and log updates, see the [Security Implementation Log](Docs/security_changes_log.md).
+For detailed changes and design details, see the [Security Implementation Log](Docs/security_changes_log.md).
 
 

@@ -1,4 +1,4 @@
-# Security and Criptare Implementation Log
+# Security and Encryption Implementation Log
 
 This document tracks the design decisions, architecture, and modifications made on the `feature/zigbee-security` branch to implement Zigbee 3.0 joining security and AES encryption.
 
@@ -30,12 +30,12 @@ To secure the network and prevent sniffers from capturing the Network Key, we ar
 ## 2. Coordinator UART Integration (Casing QR Code Simulation)
 
 To allow dynamic registration of devices without re-flashing the Coordinator:
-* The Coordinator application will listen on the serial UART interface.
-* The host PC can send a command:
+* The Coordinator application listens on the serial UART interface.
+* The host PC sends a command:
   ```
   ic_add <16-HEX-IEEE-ADDR> <36-HEX-INSTALL-CODE-WITH-CRC>
   ```
-* When parsed, the Coordinator calls the ZBOSS API:
+* When parsed, the Coordinator schedules ZBOSS API execution:
   ```c
   zb_secur_ic_add(device_addr, ZB_IC_TYPE_128, install_code, callback);
   ```
@@ -47,21 +47,48 @@ To allow dynamic registration of devices without re-flashing the Coordinator:
 To save development time and automate testing, we are implementing two key strategies:
 
 ### 3.1 Development Mode Bypass (Method B)
-We will introduce a Kconfig symbol or preprocessor definition (`CONFIG_ZIGBEE_DEVELOPMENT_SECURITY`):
+We introduced a Kconfig symbol `CONFIG_ZIGBEE_DEVELOPMENT_SECURITY`:
 * **End Device:** Sets a hardcoded, static Install Code at startup.
 * **Coordinator:** Automatically registers this specific hardcoded EUI64 and Install Code on boot.
 * This allows plug-and-play testing during direct code iterations without requiring any UART commands or external scripts.
 
 ### 3.2 Pytest E2E Automation (Method C)
-The automated Pytest E2E test suite (`test_e2e.py`) will test both scenarios:
+The automated Pytest E2E test suite (`test_e2e.py`) tests both scenarios:
+1. **Development Mode Test:** Verifies successful commission and communication when both boards rely on the static development Install Code.
+2. **Production Mode Test:** Erases persistent configuration/NVRAM, dynamically generates a random EUI64 and Install Code (with correct CRC), automatically registers them via UART on both devices, starts commissioning, and verifies the key exchange.
 
-1. **Development Mode Test (`test_e2e_development_mode`):**
-   * Verifies successful commission and communication when both boards rely on the static development Install Code.
-   * Ensures out-of-the-box security works correctly.
+---
 
-2. **Production Mode Test (`test_e2e_production_mode`):**
-   * Erases persistent configuration/NVRAM on both boards.
-   * Dynamically generates a random EUI64 and random Install Code (calculating the correct CCITT CRC16).
-   * Automatically transmits the `ic_add <EUI64> <INSTALL_CODE>` registration command over the Coordinator's UART port.
-   * Sets the corresponding Install Code on the End Device.
-   * Starts the commission process and verifies the key exchange, network association, and subsequent temperature reports.
+## 4. Key Discovery: CRC-16/X-25 and Byte-Ordering
+
+During implementation, we uncovered critical ZBOSS stack rules:
+* **CRC Algorithm:** The checksum calculation algorithm is **CRC-16/X-25** (reflected).
+* **Key Byte Reversal:** The 16-byte key must be stored in the binary buffer in **little-endian (reversed)** byte order when passed to `zb_secur_ic_set()`, and the CRC must be calculated over the reversed key.
+* **Dynamic Candidate Test:** We implemented an 8-candidate dynamically running firmware loop that identified candidate 3 (reversed key + LE CRC) as the only one returning `RET_OK` (0).
+* **Final Matching Key Configuration:**
+  * Key: `ff ee dd cc bb aa 99 88 77 66 55 44 33 22 11 00`
+  * Checksum: `52 0d` (little-endian of `0x0D52`).
+
+---
+
+## 5. Thread Safety (ZBOSS Scheduler Integration)
+
+ZBOSS is a single-threaded stack. Directly invoking ZBOSS API functions (`zb_secur_ic_add`, `zb_secur_ic_set`, bdb_start_top_level_commissioning) from the UART thread led to memory corruption and stack assertions (fatal ZBOSS crash).
+* **Fix:** We encapsulated all UART commands into asynchronous callback routines scheduled onto the ZBOSS thread via `ZB_SCHEDULE_APP_CALLBACK()`.
+* This completely eliminated the stack crashes and stabilized all E2E operations.
+
+---
+
+## 6. Verification & E2E Pytest Results
+
+The unified E2E test was executed through Twister on the physical hardware:
+* **Command:**
+  ```bash
+  west twister -T zigbee_end_device/bmp180_device/tests/e2e -p nrf52840dk/nrf52840 --device-testing --device-serial /dev/ttyACM2 --west-runner nrfutil --west-flash="--dev-id=1050247285"
+  ```
+* **Output:**
+  ```
+  INFO    - Total complete:    1/   1  100%  skipped:    0, failed:    0, error:    0
+  INFO    - 1 of 1 test configurations passed (100.00%) in 66.67 seconds
+  ```
+Both Phase 1 (Development) and Phase 2 (Production) completed without errors, proving the robust security implementation.

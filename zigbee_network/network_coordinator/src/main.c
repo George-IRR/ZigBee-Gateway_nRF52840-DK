@@ -573,6 +573,18 @@ static void factory_reset_handler(zb_bufid_t bufid)
 	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
 }
 
+static void reopen_steering_cb(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	(void)(ZB_SCHEDULE_APP_ALARM_CANCEL(steering_finished, ZB_ALARM_ANY_PARAM));
+	zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	if (comm_status) {
+		printk("steering_started\n");
+	} else {
+		printk("steering_already_active\n");
+	}
+}
+
 static struct {
 	zb_ieee_addr_t addr;
 	zb_uint8_t ic[18];
@@ -622,6 +634,8 @@ static void parse_uart_command(char *line)
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
+	} else if (strcmp(line, "reopen") == 0) {
+		ZB_SCHEDULE_APP_CALLBACK(reopen_steering_cb, 0);
 	}
 }
 

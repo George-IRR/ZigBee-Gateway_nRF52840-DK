@@ -125,12 +125,23 @@ def test_e2e_security(dut: DeviceAdapter):
     # =========================================================================
     logger.info("=== SCENARIO 1: HAPPY PATH — AUTO-JOIN (DEVELOPMENT SECURITY) ===")
 
+    # Give End Device 2s to start printing, then reopen the Coordinator steering
+    # window so it will accept join requests (window may have expired if Coordinator
+    # was booted before the test started).
+    logger.info("Waiting 2s for End Device boot output to start...")
+    collect(drain_seconds=2.0)
+
+    logger.info("Sending 'reopen' to Coordinator to open steering window...")
+    coord_ser.write(b"reopen\n")
+    time.sleep(0.5)          # give Coordinator time to process via ZBOSS thread
+    collect(drain_seconds=0.5)
+
     # Device boots → UART thread starts after 2 s delay → static IC registered →
     # bdb_start_top_level_commissioning → ZB_BDB_SIGNAL_STEERING OK →
     # LOG_INF("Network joined successfully.")   (End Device, main.c ~line 367)
     # Coordinator emits:
     # LOG_INF("New device commissioned or rejoined (short: 0x%04hx)")  (coordinator main.c ~line 488)
-    logger.info("Waiting 15 s for End Device to boot and auto-join...")
+    logger.info("Waiting 15 s for End Device to auto-join...")
     collect(drain_seconds=15.0)
 
     # Query IEEE address via UART command (command 'ieee' → printk("Device IEEE Address: ..."))

@@ -245,6 +245,24 @@ static void app_clusters_attr_init(void)
  * @param[in]   bufid   Reference to the Zigbee stack buffer
  *                      used to pass signal.
  */
+#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+static void setup_static_install_code(void)
+{
+	LOG_INF("Setting static development install code in active stack...");
+	zb_uint8_t dev_install_code[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0x42, 0x78
+	};
+	zb_ret_t ic_status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
+	if (ic_status != RET_OK) {
+		LOG_ERR("Failed to set static install code: %d", ic_status);
+	} else {
+		LOG_INF("Static development install code set successfully.");
+	}
+}
+#endif
+
 void zboss_signal_handler(zb_bufid_t bufid)
 {
 	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
@@ -254,11 +272,18 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	/* Update network status LED. */
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
-
-
 	switch (sig) {
+	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
-	/* fall-through */
+		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+		if (status == RET_OK) {
+			setup_static_install_code();
+		}
+		#endif
+		/* Call default signal handler. */
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		break;
+
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -436,26 +461,16 @@ int main(void)
 		set_tx_power();
 	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
-	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
-	LOG_INF("Configuring development security keys...");
-	zb_ieee_addr_t dev_ieee_addr = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-	zb_set_long_address(dev_ieee_addr);
 
-	zb_uint8_t dev_install_code[18] = {
-		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-		0x42, 0x78
-	};
-	zb_ret_t ic_status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
-	if (ic_status != RET_OK) {
-		LOG_ERR("Failed to set static install code: %d", ic_status);
-	} else {
-		LOG_INF("Static development install code set successfully.");
-	}
-	#endif
 
 	/* Start Zigbee default thread. */
 	zigbee_enable();
+
+	zb_ieee_addr_t self_ieee;
+	zb_get_long_address(self_ieee);
+	LOG_INF("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x",
+	        self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+	        self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
 
 	LOG_INF("ZBOSS BMP180 Temperature Sensor started");
 

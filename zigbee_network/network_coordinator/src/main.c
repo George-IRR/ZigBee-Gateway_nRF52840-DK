@@ -385,6 +385,21 @@ static void zcl_device_cb(zb_bufid_t bufid)
 	device_cb_param->status = RET_OK;
 }
 
+#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+static void register_static_development_keys(void)
+{
+	LOG_INF("Registering static development Install Code in active stack...");
+	zb_ieee_addr_t dev_ieee_addr = {0xec, 0xa7, 0x12, 0x33, 0x9e, 0x36, 0xce, 0xf4};
+	zb_uint8_t dev_install_code[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0x42, 0x78
+	};
+	zb_secur_ic_add(dev_ieee_addr, ZB_IC_TYPE_128, dev_install_code, NULL);
+	LOG_INF("Static development Install Code registered successfully.");
+}
+#endif
+
 /**@brief Zigbee stack event handler.
  *
  * @param[in]   bufid   Reference to the Zigbee stack buffer used to pass signal.
@@ -412,6 +427,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		if (status == RET_OK) {
+			#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+			register_static_development_keys();
+			#endif
 			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
 				LOG_INF("Start network steering");
 				comm_status = bdb_start_top_level_commissioning(
@@ -430,6 +448,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_FORMATION:
 		if (status == RET_OK) {
 			LOG_INF("Network formed successfully");
+			#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+			register_static_development_keys();
+			#endif
 			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
 				LOG_INF("Starting top level network steering...");
 				comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
@@ -619,18 +640,6 @@ int main(void)
 
 	/* Enforce Install Code Policy */
 	zb_set_installcode_policy(ZB_TRUE);
-
-	#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
-	LOG_INF("Registering static development Install Code...");
-	zb_ieee_addr_t dev_ieee_addr = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-	zb_uint8_t dev_install_code[18] = {
-		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-		0x42, 0x78
-	};
-	zb_secur_ic_add(dev_ieee_addr, ZB_IC_TYPE_128, dev_install_code, NULL);
-	LOG_INF("Static development Install Code registered successfully.");
-	#endif
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

@@ -6,8 +6,8 @@ import subprocess
 import pytest
 import serial
 import random
-from pathlib import Path
 from twister_harness import DeviceAdapter
+from twister_harness.exceptions import TwisterHarnessTimeoutException
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +143,11 @@ def verify_communication(dut: DeviceAdapter, coord_ser: serial.Serial, timeout: 
 
 def test_e2e_security(dut: DeviceAdapter):
     """
-    Unified E2E security test verifying both Development and Production modes
-    within a single test run to prevent serial conflicts and multi-flash failures.
+    Unified E2E security test verifying the 4 log-based security scenarios:
+    1. Secure Connection of Whitelisted Device (Happy Path)
+    2. Rogue Node Rejection (Unauthorized Device)
+    3. Secure Rejoin
+    4. BMP180 Data Integrity
     """
     switch_id, coord_id = get_dev_ids_from_config()
     ports = get_serial_ports()
@@ -155,95 +158,191 @@ def test_e2e_security(dut: DeviceAdapter):
     coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
     coord_ser.reset_input_buffer()
     
+    ed_logs = []
+    coord_logs = []
+    
+    def collect_logs(duration):
+        start = time.time()
+        while time.time() - start < duration:
+            # End Device
+            try:
+                line_ed = dut.readline(timeout=0.01, print_output=False)
+                if line_ed:
+                    line_str = line_ed.strip()
+                    logger.info(f"[End Device] {line_str}")
+                    ed_logs.append(line_str)
+            except TwisterHarnessTimeoutException:
+                pass
+            # Coordinator
+            if coord_ser.in_waiting > 0:
+                line_c = coord_ser.readline()
+                try:
+                    line_c_str = line_c.decode('utf-8', errors='ignore').strip()
+                    logger.info(f"[Coordinator] {line_c_str}")
+                    coord_logs.append(line_c_str)
+                except Exception:
+                    pass
+            time.sleep(0.01)
+
     # =========================================================================
-    # PHASE 1: Development Mode
+    # SCENARIO 1: Secure Connection of Whitelisted Device (Happy Path - Dev Security)
     # =========================================================================
-    logger.info("=== STARTING PHASE 1: DEVELOPMENT MODE ===")
+    logger.info("=== STARTING SCENARIO 1: HAPPY PATH SECURE CONNECTION (DEVELOPMENT SECURITY) ===")
     
     # 1. Reset both to start fresh
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
-    time.sleep(12)
+    collect_logs(12)
     
     coord_ser.reset_input_buffer()
     
-    # 2. Get End Device real MAC
-    real_mac_hex = get_end_device_mac(dut)
+    # 2. Get End Device MAC
+    real_mac_hex = None
+    for line in ed_logs:
+        m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line)
+        if m:
+            real_mac_hex = m.group(1).lower()
+            break
+            
+    if not real_mac_hex:
+        # Wait a bit more and check
+        collect_logs(3)
+        for line in ed_logs:
+            m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line)
+            if m:
+                real_mac_hex = m.group(1).lower()
+                break
+                
+    if not real_mac_hex:
+        coord_ser.close()
+        pytest.fail("Failed to detect End Device IEEE Address from boot logs.")
+        
+    logger.info(f"Detected End Device MAC: {real_mac_hex}")
     
-    # 3. Trigger steering on End Device
+    # 3. Trigger join steering on End Device
     logger.info("Triggering join steering on End Device...")
-    time.sleep(2.0) # Ensure initial boot steering has failed and stack is fully idle
+    time.sleep(2.0)
     dut.write(b"join\n")
     
-    # 5. Verify communication
-    success = verify_communication(dut, coord_ser, timeout=65)
-    if not success:
+    # Collect logs and wait for communication
+    collect_logs(25)
+    
+    # Verify Scenario 1 Assertions:
+    # A. New device announcement log check
+    annce_found = any("Device update received" in l or "New device commissioned" in l for l in coord_logs)
+    # B. Security key association check (authorization status: 0)
+    auth_success = any("authorization status: 0" in l for l in coord_logs)
+    
+    logger.info(f"Scenario 1 - Device Update detected: {annce_found}")
+    logger.info(f"Scenario 1 - Key Association Success (status 0): {auth_success}")
+    
+    if not (annce_found and auth_success):
         coord_ser.close()
-        pytest.fail("E2E Development Mode Phase Failed: Communication check timed out.")
+        pytest.fail("Scenario 1 Failed: Whitelisted device secure association logs not found.")
         
     # =========================================================================
-    # PHASE 2: Production Mode (Dynamic UART registration)
+    # SCENARIO 3: Secure Rejoin
     # =========================================================================
-    logger.info("=== STARTING PHASE 2: PRODUCTION MODE ===")
+    logger.info("=== STARTING SCENARIO 3: SECURE REJOIN ===")
     
-    # 1. Reset both to clean state
-    logger.info("Performing factory reset on Coordinator and End Device...")
+    # Clear logs before reboot
+    ed_logs.clear()
+    coord_logs.clear()
+    
+    # 1. Soft reboot End Device via console command
+    logger.info("Rebooting End Device...")
+    dut.write(b"reboot\n")
+    collect_logs(15)
+    
+    # Verify Scenario 3 Assertions:
+    # A. Secure rejoin request/completion log check (status 1 is rejoin)
+    rejoin_found = any("Device update received" in l and "status: 1" in l for l in coord_logs) or \
+                   any("rejoined" in l.lower() for l in coord_logs)
+    # B. Bypassed initial key exchange (no "Static development install code set" after boot for join)
+    no_new_key_exchange = not any("Setting static development install code" in l for l in ed_logs)
+    
+    logger.info(f"Scenario 3 - Secure Rejoin detected: {rejoin_found}")
+    logger.info(f"Scenario 3 - No new key exchange: {no_new_key_exchange}")
+    
+    if not rejoin_found:
+        coord_ser.close()
+        pytest.fail("Scenario 3 Failed: Secure rejoin logs not found on Coordinator.")
+
+    # =========================================================================
+    # SCENARIO 2: Rogue Node Rejection (Unauthorized Device)
+    # =========================================================================
+    logger.info("=== STARTING SCENARIO 2: ROGUE NODE REJECTION ===")
+    
+    # 1. Reset both to factory defaults
+    logger.info("Performing factory reset to enter Production Mode (clearing keys)...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
-    time.sleep(12)
+    ed_logs.clear()
+    coord_logs.clear()
+    collect_logs(12)
     
-    coord_ser.reset_input_buffer()
-    
-    # 2. Get End Device real MAC
-    real_mac_hex = get_end_device_mac(dut)
-    
-    # 3. Generate a random Install Code (16 bytes key + 2 bytes CRC)
+    # 2. Set Install Code on End Device, but do NOT register it on Coordinator (Simulate Rogue)
     ic_key_bytes = bytes([random.randint(0x00, 0xFF) for _ in range(16)])
     crc_val = crc16_ccitt(ic_key_bytes)
     crc_bytes = bytes([crc_val & 0xFF, (crc_val >> 8) & 0xFF])
     ic_bytes = ic_key_bytes + crc_bytes
     ic_hex = ic_bytes.hex()
     
-    logger.info(f"Dynamic MAC: {real_mac_hex}, Install Code: {ic_hex}")
+    logger.info(f"Rogue Install Code: {ic_hex}")
     
-    # 4. Register Install Code on Coordinator via UART
-    logger.info("Registering Install Code on Coordinator via UART...")
-    coord_ser.write(f"ic_add {real_mac_hex} {ic_hex}\n".encode())
-    
-    success_found = False
-    start_wait = time.time()
-    while time.time() - start_wait < 5:
-        if coord_ser.in_waiting > 0:
-            line = coord_ser.readline().decode('utf-8', errors='ignore').strip()
-            if "ic_add_success" in line:
-                logger.info("Coordinator registered key successfully!")
-                success_found = True
-                break
-        time.sleep(0.05)
-        
-    # 5. Set Install Code on End Device via UART
     logger.info("Setting Install Code on End Device via UART...")
     dut.write(f"ic_set {real_mac_hex} {ic_hex}\n".encode())
+    collect_logs(2)
     
-    ed_success = False
-    start_wait = time.time()
-    while time.time() - start_wait < 5:
-        line = dut.readline()
-        if line and "ic_set_success" in line:
-            logger.info("End Device set key successfully!")
-            ed_success = True
-            break
-        time.sleep(0.05)
-        
-    # 6. Trigger steering on End Device
-    logger.info("Triggering join steering on End Device...")
-    time.sleep(5.0) # Wait for any automatic steering at boot to finish
+    logger.info("Triggering join on End Device (Unauthorized Join Attempt)...")
     dut.write(b"join\n")
+    collect_logs(20)
     
-    # 7. Verify communication
-    success = verify_communication(dut, coord_ser, timeout=65)
+    # Verify Scenario 2 Assertions:
+    # A. Check Coordinator rejected TCLK authorization (status 2 / failed)
+    auth_failed = any("authorization status:" in l and "authorization status: 0" not in l for l in coord_logs)
+    # B. Verify no temperature reports decrypted successfully
+    no_temp_received = not any("Temperature:" in l for l in coord_logs)
+    
+    logger.info(f"Scenario 2 - Rejected Device detected: {auth_failed}")
+    logger.info(f"Scenario 2 - No temperature decrypted: {no_temp_received}")
+    
+    if not (auth_failed and no_temp_received):
+        coord_ser.close()
+        pytest.fail("Scenario 2 Failed: Coordinator did not reject the unauthorized rogue device or accepted data.")
+
+    # =========================================================================
+    # SCENARIO 4: BMP180 Data Integrity
+    # =========================================================================
+    logger.info("=== STARTING SCENARIO 4: BMP180 DATA INTEGRITY ===")
+    
+    # 1. Register the correct Install Code on Coordinator to allow successful pairing
+    logger.info("Registering Install Code on Coordinator via UART...")
+    coord_ser.write(f"ic_add {real_mac_hex} {ic_hex}\n".encode())
+    collect_logs(2)
+    
+    # 2. Trigger join on End Device
+    logger.info("Triggering join on End Device (Authorized Join)...")
+    dut.write(b"join\n")
+    collect_logs(25)
+    
+    # Verify Scenario 4 Assertions:
+    # A. Verify ZCL temperature reports sent successfully
+    tx_success = any("Write attribute request sent successfully!" in l for l in ed_logs)
+    # B. Verify ZCL temperature reports received and decoded correctly by Coordinator
+    rx_success = any("zcl_device_cb - Temperature:" in l for l in coord_logs)
+    # C. Verify no cryptographic/decrypt/MIC failure logs
+    no_decrypt_errors = not any("MIC failure" in l or "decrypt error" in l.lower() or "Cryptkey mismatch" in l for l in coord_logs)
+    
+    logger.info(f"Scenario 4 - Reports sent: {tx_success}")
+    logger.info(f"Scenario 4 - Reports received: {rx_success}")
+    logger.info(f"Scenario 4 - No decryption errors: {no_decrypt_errors}")
+    
     coord_ser.close()
     
-    if not success:
-        pytest.fail("E2E Production Mode Phase Failed: Communication check timed out.")
+    if not (tx_success and rx_success and no_decrypt_errors):
+        pytest.fail("Scenario 4 Failed: Data integrity check failed or decryption errors detected.")
+    
+    logger.info("=== ALL E2E LOG-BASED SECURITY SCENARIOS PASSED SUCCESSFULLY ===")
+

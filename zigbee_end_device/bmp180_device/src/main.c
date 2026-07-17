@@ -488,16 +488,6 @@ static void reboot_handler(zb_bufid_t bufid)
 	sys_reboot(SYS_REBOOT_COLD);
 }
 
-static void ieee_print_callback(zb_bufid_t bufid)
-{
-	ARG_UNUSED(bufid);
-	zb_ieee_addr_t self_ieee;
-	zb_get_long_address(self_ieee);
-	printk("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x\n",
-	       self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
-	       self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
-}
-
 static void parse_uart_command(char *line)
 {
 	if (strncmp(line, "ic_set ", 7) == 0) {
@@ -527,7 +517,11 @@ static void parse_uart_command(char *line)
 		printk("reboot_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(reboot_handler, 0);
 	} else if (strcmp(line, "ieee") == 0) {
-		ZB_SCHEDULE_APP_CALLBACK(ieee_print_callback, 0);
+		zb_ieee_addr_t self_ieee;
+		zb_get_long_address(self_ieee);
+		printk("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x\n",
+		       self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+		       self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
 	}
 }
 

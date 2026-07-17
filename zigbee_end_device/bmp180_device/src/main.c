@@ -368,6 +368,32 @@ static void factory_reset_handler(zb_bufid_t bufid)
 	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
 }
 
+static struct {
+	zb_ieee_addr_t addr;
+	zb_uint8_t ic[18];
+} g_ic_set_params;
+
+static void ic_set_callback(zb_bufid_t bufid)
+{
+	zb_set_long_address(g_ic_set_params.addr);
+	zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, g_ic_set_params.ic);
+	if (status == RET_OK) {
+		printk("ic_set_success\n");
+	} else {
+		printk("ic_set_failed: %d\n", status);
+	}
+}
+
+static void join_callback(zb_bufid_t bufid)
+{
+	zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	if (comm_status) {
+		printk("join_started\n");
+	} else {
+		printk("join_failed_busy\n");
+	}
+}
+
 static void parse_uart_command(char *line)
 {
 	if (strncmp(line, "ic_set ", 7) == 0) {
@@ -379,30 +405,17 @@ static void parse_uart_command(char *line)
 			return;
 		}
 
-		zb_ieee_addr_t addr;
 		for (int i = 0; i < 8; i++) {
-			addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+			g_ic_set_params.addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
 		}
 
-		zb_uint8_t ic[18];
 		for (int i = 0; i < 18; i++) {
-			ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+			g_ic_set_params.ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
 		}
 
-		zb_set_long_address(addr);
-		zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, ic);
-		if (status == RET_OK) {
-			printk("ic_set_success\n");
-		} else {
-			printk("ic_set_failed: %d\n", status);
-		}
+		ZB_SCHEDULE_APP_CALLBACK(ic_set_callback, 0);
 	} else if (strcmp(line, "join") == 0) {
-		zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
-		if (comm_status) {
-			printk("join_started\n");
-		} else {
-			printk("join_failed_busy\n");
-		}
+		ZB_SCHEDULE_APP_CALLBACK(join_callback, 0);
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);

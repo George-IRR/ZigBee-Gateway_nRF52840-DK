@@ -250,17 +250,21 @@ static void app_clusters_attr_init(void)
 static void setup_static_install_code(void)
 {
 	LOG_INF("Setting static development install code in active stack...");
-	zb_uint8_t dev_install_code[18] = {
-		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
-		0xa5, 0x68
+	char *candidates[] = {
+		"00112233445566778899aabbccddeeffa568",
+		"00112233445566778899aabbccddeeff68a5",
+		"00112233445566778899aabbccddeeff7842",
+		"00112233445566778899aabbccddeeff4278"
 	};
-	zb_ret_t ic_status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
-	if (ic_status != RET_OK) {
-		LOG_ERR("Failed to set static install code: %d", ic_status);
-	} else {
-		LOG_INF("Static development install code set successfully.");
+	for (int i = 0; i < 4; i++) {
+		zb_ret_t status = zb_secur_ic_str_set(candidates[i]);
+		LOG_INF("Trying candidate %s: status = %d", candidates[i], status);
+		if (status == RET_OK) {
+			LOG_INF("Successfully set static install code using: %s", candidates[i]);
+			return;
+		}
 	}
+	LOG_ERR("All static install code candidates failed!");
 }
 #endif
 

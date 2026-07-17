@@ -551,13 +551,19 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 	}
 }
 
-K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
-                uart_rx_thread, NULL, NULL, NULL,
-                UART_THREAD_PRIORITY, 0, 0);
+K_THREAD_STACK_DEFINE(uart_rx_stack, UART_THREAD_STACK_SIZE);
+static struct k_thread uart_rx_thread_data;
+static k_tid_t uart_rx_tid;
 
 int main(void)
 {
 	LOG_INF("Starting ZBOSS BMP180 Temperature Sensor");
+
+	/* Start UART RX thread with 2s delay to ensure console/drivers are ready. */
+	uart_rx_tid = k_thread_create(&uart_rx_thread_data, uart_rx_stack,
+				      K_THREAD_STACK_SIZEOF(uart_rx_stack),
+				      uart_rx_thread, NULL, NULL, NULL,
+				      UART_THREAD_PRIORITY, 0, K_MSEC(2000));
 
 
 	/* Initialize. */

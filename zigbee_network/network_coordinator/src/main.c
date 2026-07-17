@@ -14,6 +14,7 @@
 #include <dk_buttons_and_leds.h>
 #include <zephyr/console/console.h>
 #include <string.h>
+#include <zephyr/sys/reboot.h>
 
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
@@ -389,6 +390,7 @@ static void zcl_device_cb(zb_bufid_t bufid)
 static void register_static_development_keys(void)
 {
 	LOG_INF("Registering static development Install Code in active stack...");
+	zb_set_installcode_policy(ZB_TRUE);
 	zb_ieee_addr_t dev_ieee_addr = {0xec, 0xa7, 0x12, 0x33, 0x9e, 0x36, 0xce, 0xf4};
 	zb_uint8_t dev_install_code[18] = {
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -556,29 +558,44 @@ static inline zb_uint8_t hex_pair_to_byte(const char *hex)
 	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
 }
 
+static struct k_timer reboot_timer;
+
+static void reboot_timer_handler(struct k_timer *dummy)
+{
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+static void factory_reset_handler(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	zb_bdb_reset_via_local_action(0);
+	k_timer_init(&reboot_timer, reboot_timer_handler, NULL);
+	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
+}
+
 static void parse_uart_command(char *line)
 {
 	/* Expect: "ic_add 0807060504030201 00112233445566778899aabbccddeeff4278" */
 	if (strncmp(line, "ic_add ", 7) == 0) {
 		const char *ieee_hex = &line[7];
 		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
-
+ 
 		// Simple length checks
 		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
 			printk("ic_add_failed: invalid format\n");
 			return;
 		}
-
+ 
 		zb_ieee_addr_t addr;
 		for (int i = 0; i < 8; i++) {
 			addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
 		}
-
+ 
 		zb_uint8_t ic[18];
 		for (int i = 0; i < 18; i++) {
 			ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
 		}
-
+ 
 		zb_secur_ic_add(addr, ZB_IC_TYPE_128, ic, NULL);
 		printk("ic_add_success: ");
 		for (int i = 0; i < 8; i++) {
@@ -587,7 +604,7 @@ static void parse_uart_command(char *line)
 		printk("\n");
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
-		ZB_SCHEDULE_APP_CALLBACK(zb_bdb_reset_via_local_action, 0);
+		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
 	}
 }
 

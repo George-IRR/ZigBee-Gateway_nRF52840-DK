@@ -68,14 +68,22 @@ def get_serial_ports():
 def crc16_ccitt(data: bytes) -> int:
     crc = 0xFFFF
     for byte in data:
-        crc ^= (byte << 8)
+        temp = 0
+        for i in range(8):
+            if (byte >> i) & 1:
+                temp |= (1 << (7 - i))
+        crc ^= (temp << 8)
         for _ in range(8):
             if crc & 0x8000:
                 crc = (crc << 1) ^ 0x1021
             else:
                 crc = crc << 1
             crc &= 0xFFFF
-    return crc
+    reflected_crc = 0
+    for i in range(16):
+        if (crc >> i) & 1:
+            reflected_crc |= (1 << (15 - i))
+    return reflected_crc ^ 0xFFFF
 
 def get_end_device_mac(dut: DeviceAdapter, timeout: int = 15) -> str:
     start_time = time.time()

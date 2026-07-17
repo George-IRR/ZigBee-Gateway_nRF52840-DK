@@ -573,35 +573,43 @@ static void factory_reset_handler(zb_bufid_t bufid)
 	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
 }
 
+static struct {
+	zb_ieee_addr_t addr;
+	zb_uint8_t ic[18];
+} g_ic_add_params;
+
+static void ic_add_callback(zb_bufid_t bufid)
+{
+	zb_secur_ic_add(g_ic_add_params.addr, ZB_IC_TYPE_128, g_ic_add_params.ic, NULL);
+	printk("ic_add_success: ");
+	for (int i = 0; i < 8; i++) {
+		printk("%02x", g_ic_add_params.addr[7 - i]);
+	}
+	printk("\n");
+}
+
 static void parse_uart_command(char *line)
 {
 	/* Expect: "ic_add 0807060504030201 00112233445566778899aabbccddeeff4278" */
 	if (strncmp(line, "ic_add ", 7) == 0) {
 		const char *ieee_hex = &line[7];
 		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
- 
+
 		// Simple length checks
 		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
 			printk("ic_add_failed: invalid format\n");
 			return;
 		}
- 
-		zb_ieee_addr_t addr;
+
 		for (int i = 0; i < 8; i++) {
-			addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+			g_ic_add_params.addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
 		}
- 
-		zb_uint8_t ic[18];
+
 		for (int i = 0; i < 18; i++) {
-			ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+			g_ic_add_params.ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
 		}
- 
-		zb_secur_ic_add(addr, ZB_IC_TYPE_128, ic, NULL);
-		printk("ic_add_success: ");
-		for (int i = 0; i < 8; i++) {
-			printk("%02x", addr[7 - i]);
-		}
-		printk("\n");
+
+		ZB_SCHEDULE_APP_CALLBACK(ic_add_callback, 0);
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);

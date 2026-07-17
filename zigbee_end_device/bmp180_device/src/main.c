@@ -14,6 +14,7 @@
 #include <dk_buttons_and_leds.h>
 #include <zephyr/console/console.h>
 #include <string.h>
+#include <zephyr/sys/reboot.h>
 #include <ram_pwrdn.h>
 
 #include <zboss_api.h>
@@ -276,9 +277,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
-		if (status == RET_OK) {
-			setup_static_install_code();
-		}
+		setup_static_install_code();
 		#endif
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -353,6 +352,21 @@ static inline zb_uint8_t hex_pair_to_byte(const char *hex)
 	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
 }
 
+static struct k_timer reboot_timer;
+
+static void reboot_timer_handler(struct k_timer *dummy)
+{
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+static void factory_reset_handler(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	zb_bdb_reset_via_local_action(0);
+	k_timer_init(&reboot_timer, reboot_timer_handler, NULL);
+	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
+}
+
 static void parse_uart_command(char *line)
 {
 	if (strncmp(line, "ic_set ", 7) == 0) {
@@ -390,7 +404,7 @@ static void parse_uart_command(char *line)
 		}
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
-		ZB_SCHEDULE_APP_CALLBACK(zb_bdb_reset_via_local_action, 0);
+		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
 	}
 }
 

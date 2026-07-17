@@ -162,20 +162,15 @@ def test_e2e_security(dut: DeviceAdapter):
     ed_logs = []
     coord_logs = []
     
-    def collect_logs(duration):
-        start = time.time()
-        while time.time() - start < duration:
-            # End Device
-            try:
-                line_ed = dut.readline(timeout=0.01, print_output=False)
-                if line_ed:
-                    line_str = line_ed.strip()
-                    logger.info(f"[End Device] {line_str}")
-                    ed_logs.append(line_str)
-            except TwisterHarnessTimeoutException:
-                pass
-            # Coordinator (only read if port is open)
-            if coord_ser and coord_ser.is_open and coord_ser.in_waiting > 0:
+    def collect_device_logs():
+        # Read all pending lines from End Device queue
+        for line in dut.readlines(print_output=False):
+            line_str = line.strip()
+            logger.info(f"[End Device] {line_str}")
+            ed_logs.append(line_str)
+        # Read all pending lines from Coordinator serial buffer
+        if coord_ser and coord_ser.is_open:
+            while coord_ser.in_waiting > 0:
                 try:
                     line_c = coord_ser.readline()
                     line_c_str = line_c.decode('utf-8', errors='ignore').strip()
@@ -183,7 +178,6 @@ def test_e2e_security(dut: DeviceAdapter):
                     coord_logs.append(line_c_str)
                 except Exception:
                     pass
-            time.sleep(0.01)
 
     # =========================================================================
     # SCENARIO 1: Secure Connection of Whitelisted Device (Happy Path - Dev Security)
@@ -197,11 +191,16 @@ def test_e2e_security(dut: DeviceAdapter):
     
     # Close Coordinator port during reboot to prevent SerialException
     coord_ser.close()
-    collect_logs(12)
+    
+    # Let them reboot and initialize (background thread collects End Device output)
+    time.sleep(12)
     
     # Reopen Coordinator port
     coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
     coord_ser.reset_input_buffer()
+    
+    # Collect all boot logs
+    collect_device_logs()
     
     # 2. Get End Device MAC
     real_mac_hex = None
@@ -213,7 +212,8 @@ def test_e2e_security(dut: DeviceAdapter):
             
     if not real_mac_hex:
         # Wait a bit more and check
-        collect_logs(3)
+        time.sleep(3)
+        collect_device_logs()
         for line in ed_logs:
             m = re.search(r'Device IEEE Address:\s*([0-9a-fA-F]{16})', line)
             if m:
@@ -231,8 +231,9 @@ def test_e2e_security(dut: DeviceAdapter):
     time.sleep(2.0)
     dut.write(b"join\n")
     
-    # Collect logs and wait for communication
-    collect_logs(25)
+    # Wait for association and initial reports
+    time.sleep(25)
+    collect_device_logs()
     
     # Verify Scenario 1 Assertions:
     # A. New device announcement log check
@@ -259,7 +260,8 @@ def test_e2e_security(dut: DeviceAdapter):
     # 1. Soft reboot End Device via console command
     logger.info("Rebooting End Device...")
     dut.write(b"reboot\n")
-    collect_logs(15)
+    time.sleep(15)
+    collect_device_logs()
     
     # Verify Scenario 3 Assertions:
     # A. Secure rejoin request/completion log check (status 1 is rejoin)
@@ -290,11 +292,14 @@ def test_e2e_security(dut: DeviceAdapter):
     
     ed_logs.clear()
     coord_logs.clear()
-    collect_logs(12)
+    time.sleep(12)
     
     # Reopen Coordinator port
     coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
     coord_ser.reset_input_buffer()
+    
+    # Collect boot logs
+    collect_device_logs()
     
     # 2. Set Install Code on End Device, but do NOT register it on Coordinator (Simulate Rogue)
     ic_key_bytes = bytes([random.randint(0x00, 0xFF) for _ in range(16)])
@@ -307,11 +312,13 @@ def test_e2e_security(dut: DeviceAdapter):
     
     logger.info("Setting Install Code on End Device via UART...")
     dut.write(f"ic_set {real_mac_hex} {ic_hex}\n".encode())
-    collect_logs(2)
+    time.sleep(2)
+    collect_device_logs()
     
     logger.info("Triggering join on End Device (Unauthorized Join Attempt)...")
     dut.write(b"join\n")
-    collect_logs(20)
+    time.sleep(20)
+    collect_device_logs()
     
     # Verify Scenario 2 Assertions:
     # A. Check Coordinator rejected TCLK authorization (status 2 / failed)
@@ -334,12 +341,14 @@ def test_e2e_security(dut: DeviceAdapter):
     # 1. Register the correct Install Code on Coordinator to allow successful pairing
     logger.info("Registering Install Code on Coordinator via UART...")
     coord_ser.write(f"ic_add {real_mac_hex} {ic_hex}\n".encode())
-    collect_logs(2)
+    time.sleep(2)
+    collect_device_logs()
     
     # 2. Trigger join on End Device
     logger.info("Triggering join on End Device (Authorized Join)...")
     dut.write(b"join\n")
-    collect_logs(25)
+    time.sleep(25)
+    collect_device_logs()
     
     # Verify Scenario 4 Assertions:
     # A. Verify ZCL temperature reports sent successfully

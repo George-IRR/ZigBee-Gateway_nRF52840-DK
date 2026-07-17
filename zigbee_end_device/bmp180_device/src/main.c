@@ -250,21 +250,32 @@ static void app_clusters_attr_init(void)
 static void setup_static_install_code(void)
 {
 	LOG_INF("Setting static development install code in active stack...");
-	char *candidates[] = {
-		"00112233445566778899aabbccddeeffa568",
-		"00112233445566778899aabbccddeeff68a5",
-		"00112233445566778899aabbccddeeff7842",
-		"00112233445566778899aabbccddeeff4278"
+	zb_uint8_t dev_install_code_le[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0xa5, 0x68
 	};
-	for (int i = 0; i < 4; i++) {
-		zb_ret_t status = zb_secur_ic_str_set(candidates[i]);
-		LOG_INF("Trying candidate %s: status = %d", candidates[i], status);
-		if (status == RET_OK) {
-			LOG_INF("Successfully set static install code using: %s", candidates[i]);
-			return;
-		}
+	zb_uint8_t dev_install_code_be[18] = {
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+		0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+		0x68, 0xa5
+	};
+
+	zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code_le);
+	LOG_INF("Trying LE (a5, 68): status = %d", status);
+	if (status == RET_OK) {
+		LOG_INF("Static development install code set successfully (LE).");
+		return;
 	}
-	LOG_ERR("All static install code candidates failed!");
+
+	status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code_be);
+	LOG_INF("Trying BE (68, a5): status = %d", status);
+	if (status == RET_OK) {
+		LOG_INF("Static development install code set successfully (BE).");
+		return;
+	}
+
+	LOG_ERR("All static install code binary configurations failed!");
 }
 #endif
 

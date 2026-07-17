@@ -30,11 +30,12 @@ The system acts as a bridge between a wireless Zigbee sensor network and a contr
 ### Phase 2: End-Device (Zigbee Node)
 * [x] Interface sensors with the microcontroller. (BMP180 Integrated)
 * [ ] Implement **Hardware WDT** and **Deep Sleep / Wake Up** routines.
-* [ ] Establish Zigbee network connection with **AES-128** encryption and define payload format.
+* [x] Establish Zigbee network connection with **Install Code security** (AES-128 TCLK exchange). See [Production Pairing Guide](Docs/production_pairing_guide.md).
 * [ ] Implement cyclic transmission with pre-transmission **Jitter** and **Exponential Backoff** for lost ACKs.
 
 ### Phase 3: Gateway & Parser
 * [x] Configure Gateway as a **Zigbee Coordinator**.
+* [x] **UART command interface** for dynamic device registration (`ic_add`, `factory_reset`).
 * [ ] Implement a **Message Queue** for asynchronous message handling.
 * [ ] Develop the payload parser and write Unit Tests in the CI/CD pipeline to validate decoding.
 
@@ -45,8 +46,9 @@ The system acts as a bridge between a wireless Zigbee sensor network and a contr
 * [ ] Integrate automated logic tests for the flow: *Memory Write -> Timeout Trigger -> Modbus Response Validation*.
 
 ### Phase 5: E2E Integration (End-to-End)
-* [x] Full hardware/software system execution. (E2E Zigbee communication tested)
+* [x] Full hardware/software system execution. (E2E Zigbee security tested — both Development and Production modes)
 * [ ] Test register polling using an external Modbus client.
+
 
 ---
 

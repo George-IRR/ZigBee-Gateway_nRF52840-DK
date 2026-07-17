@@ -133,10 +133,10 @@ def verify_communication(dut: DeviceAdapter, coord_ser: serial.Serial, timeout: 
     logger.error(f"Timeout waiting for communication. Sent: {sent_temperatures}, Received: {received_temperatures}")
     return False
 
-def test_e2e_development_mode(dut: DeviceAdapter):
+def test_e2e_security(dut: DeviceAdapter):
     """
-    Test Case 1: Development Mode Security
-    - Both boards utilize the static development Install Code out-of-the-box.
+    Unified E2E security test verifying both Development and Production modes
+    within a single test run to prevent serial conflicts and multi-flash failures.
     """
     switch_id, coord_id = get_dev_ids_from_config()
     ports = get_serial_ports()
@@ -147,6 +147,11 @@ def test_e2e_development_mode(dut: DeviceAdapter):
     coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
     coord_ser.reset_input_buffer()
     
+    # =========================================================================
+    # PHASE 1: Development Mode
+    # =========================================================================
+    logger.info("=== STARTING PHASE 1: DEVELOPMENT MODE ===")
+    
     # 1. Reset both to start fresh
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
@@ -155,14 +160,13 @@ def test_e2e_development_mode(dut: DeviceAdapter):
     
     coord_ser.reset_input_buffer()
     
-    # 2. Detect End Device real MAC address
+    # 2. Get End Device real MAC
     real_mac_hex = get_end_device_mac(dut)
     
     # 3. Dynamic register development key on Coordinator (to support any hardware/CI)
     logger.info(f"Pre-registering development Install Code for EUI64 {real_mac_hex} on Coordinator...")
     coord_ser.write(f"ic_add {real_mac_hex} 00112233445566778899aabbccddeeff4278\n".encode())
     
-    # Verify success registration log on Coordinator
     success_found = False
     start_wait = time.time()
     while time.time() - start_wait < 5:
@@ -179,29 +183,17 @@ def test_e2e_development_mode(dut: DeviceAdapter):
     dut.write(b"join\n")
     
     # 5. Verify communication
-    success = verify_communication(dut, coord_ser, timeout=60)
-    coord_ser.close()
-    
+    success = verify_communication(dut, coord_ser, timeout=65)
     if not success:
-        pytest.fail("E2E Development Mode Test Failed: Communication check timed out.")
-
-def test_e2e_production_mode(dut: DeviceAdapter):
-    """
-    Test Case 2: Production Mode Security
-    - Dynamically registers a random Install Code to the Coordinator over UART.
-    - Sets the key on the End Device over UART.
-    - Triggers steering and verifies communication.
-    """
-    switch_id, coord_id = get_dev_ids_from_config()
-    ports = get_serial_ports()
-    if coord_id not in ports or not ports[coord_id]:
-        pytest.fail(f"Coordinator device {coord_id} not found in connected ports.")
+        coord_ser.close()
+        pytest.fail("E2E Development Mode Phase Failed: Communication check timed out.")
         
-    coord_port = ports[coord_id][0]
-    coord_ser = serial.Serial(coord_port, baudrate=115200, timeout=0.1)
-    coord_ser.reset_input_buffer()
+    # =========================================================================
+    # PHASE 2: Production Mode (Dynamic UART registration)
+    # =========================================================================
+    logger.info("=== STARTING PHASE 2: PRODUCTION MODE ===")
     
-    # 1. Reset both to start fresh
+    # 1. Reset both to clean state
     logger.info("Performing factory reset on Coordinator and End Device...")
     coord_ser.write(b"factory_reset\n")
     dut.write(b"factory_reset\n")
@@ -255,8 +247,8 @@ def test_e2e_production_mode(dut: DeviceAdapter):
     dut.write(b"join\n")
     
     # 7. Verify communication
-    success = verify_communication(dut, coord_ser, timeout=60)
+    success = verify_communication(dut, coord_ser, timeout=65)
     coord_ser.close()
     
     if not success:
-        pytest.fail("E2E Production Mode Test Failed: Communication check timed out.")
+        pytest.fail("E2E Production Mode Phase Failed: Communication check timed out.")

@@ -550,7 +550,7 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 
 K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
                 uart_rx_thread, NULL, NULL, NULL,
-                UART_THREAD_PRIORITY, 0, K_MSEC(2000));
+                UART_THREAD_PRIORITY, 0, 2000);
 
 int main(void)
 {

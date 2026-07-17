@@ -12,6 +12,9 @@
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
 #include <dk_buttons_and_leds.h>
+#include <zephyr/console/console.h>
+#include <string.h>
+#include <zephyr/sys/reboot.h>
 
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
@@ -19,9 +22,6 @@
 #include <zigbee/zigbee_error_handler.h>
 #include <zigbee/zigbee_app_utils.h>
 #include <zb_nrf_platform.h>
-
-// BMP180
-#include <stdlib.h>
 
 #define RUN_STATUS_LED                         DK_LED1
 #define RUN_LED_BLINK_INTERVAL                 1000
@@ -379,12 +379,28 @@ static void zcl_device_cb(zb_bufid_t bufid)
 
 			LOG_INF("zcl_device_cb - Temperature: %d.%d C (Raw value: %d)", 
 			        temperature_raw / 10, 
-			        abs(temperature_raw % 10), 
+			        (temperature_raw % 10 < 0 ? -(temperature_raw % 10) : (temperature_raw % 10)), 
 			        temperature_raw);
 		}
 	}
 	device_cb_param->status = RET_OK;
 }
+
+#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+static void register_static_development_keys(void)
+{
+	LOG_INF("Registering static development Install Code in active stack...");
+	zb_set_installcode_policy(ZB_TRUE);
+	zb_ieee_addr_t dev_ieee_addr = {0xec, 0xa7, 0x12, 0x33, 0x9e, 0x36, 0xce, 0xf4};
+	zb_uint8_t dev_install_code[18] = {
+		0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88,
+		0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
+		0x52, 0x0d
+	};
+	zb_secur_ic_add(dev_ieee_addr, ZB_IC_TYPE_128, dev_install_code, NULL);
+	LOG_INF("Static development Install Code registered successfully.");
+}
+#endif
 
 /**@brief Zigbee stack event handler.
  *
@@ -413,6 +429,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		if (status == RET_OK) {
+			#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+			register_static_development_keys();
+			#endif
 			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
 				LOG_INF("Start network steering");
 				comm_status = bdb_start_top_level_commissioning(
@@ -431,6 +450,9 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_FORMATION:
 		if (status == RET_OK) {
 			LOG_INF("Network formed successfully");
+			#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+			register_static_development_keys();
+			#endif
 			if (ZIGBEE_MANUAL_STEERING == ZB_FALSE) {
 				LOG_INF("Starting top level network steering...");
 				comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
@@ -518,10 +540,104 @@ static void modify_attr_value_callback(zb_uint8_t ep, zb_uint16_t cluster_id, zb
 		zb_int16_t temperature_raw = *(zb_int16_t *)value;
 		LOG_INF("modify_attr_value_callback - Temperature: %d.%d C (Raw value: %d)", 
 		        temperature_raw / 10, 
-		        abs(temperature_raw % 10), 
+		        (temperature_raw % 10 < 0 ? -(temperature_raw % 10) : (temperature_raw % 10)), 
 		        temperature_raw);
 	}
 }
+
+static inline zb_uint8_t hex_char_to_val(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+	if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+	return 0;
+}
+
+static inline zb_uint8_t hex_pair_to_byte(const char *hex)
+{
+	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
+}
+
+static struct k_timer reboot_timer;
+
+static void reboot_timer_handler(struct k_timer *dummy)
+{
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+static void factory_reset_handler(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	zb_bdb_reset_via_local_action(0);
+	k_timer_init(&reboot_timer, reboot_timer_handler, NULL);
+	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
+}
+
+static struct {
+	zb_ieee_addr_t addr;
+	zb_uint8_t ic[18];
+} g_ic_add_params;
+
+static void ic_add_callback(zb_bufid_t bufid)
+{
+	zb_secur_ic_add(g_ic_add_params.addr, ZB_IC_TYPE_128, g_ic_add_params.ic, NULL);
+	printk("ic_add_success: ");
+	for (int i = 0; i < 8; i++) {
+		printk("%02x", g_ic_add_params.addr[7 - i]);
+	}
+	printk("\n");
+}
+
+static void parse_uart_command(char *line)
+{
+	/* Expect: "ic_add 0807060504030201 00112233445566778899aabbccddeeff4278" */
+	if (strncmp(line, "ic_add ", 7) == 0) {
+		const char *ieee_hex = &line[7];
+		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
+
+		// Simple length checks
+		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
+			printk("ic_add_failed: invalid format\n");
+			return;
+		}
+
+		for (int i = 0; i < 8; i++) {
+			g_ic_add_params.addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+		}
+
+		for (int i = 0; i < 18; i++) {
+			g_ic_add_params.ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+		}
+
+		ZB_SCHEDULE_APP_CALLBACK(ic_add_callback, 0);
+	} else if (strcmp(line, "factory_reset") == 0) {
+		printk("factory_reset_started\n");
+		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
+	}
+}
+
+#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_PRIORITY 10
+
+static void uart_rx_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	console_getline_init();
+
+	while (1) {
+		char *line = console_getline();
+		if (line) {
+			parse_uart_command(line);
+		}
+	}
+}
+
+K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
+                uart_rx_thread, NULL, NULL, NULL,
+                UART_THREAD_PRIORITY, 0, 0);
 
 int main(void)
 {
@@ -546,6 +662,9 @@ int main(void)
 
 	/* Set modify attribute callback to capture Write Attribute commands */
 	ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB(modify_attr_value_callback);
+
+	/* Enforce Install Code Policy */
+	zb_set_installcode_policy(ZB_TRUE);
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

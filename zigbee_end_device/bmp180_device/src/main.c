@@ -12,6 +12,9 @@
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
 #include <dk_buttons_and_leds.h>
+#include <zephyr/console/console.h>
+#include <string.h>
+#include <zephyr/sys/reboot.h>
 #include <ram_pwrdn.h>
 
 #include <zboss_api.h>
@@ -243,6 +246,25 @@ static void app_clusters_attr_init(void)
  * @param[in]   bufid   Reference to the Zigbee stack buffer
  *                      used to pass signal.
  */
+#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+static void setup_static_install_code(void)
+{
+	LOG_INF("Setting static development install code in active stack...");
+	zb_uint8_t dev_install_code[18] = {
+		0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88,
+		0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
+		0x52, 0x0d
+	};
+
+	zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, dev_install_code);
+	if (status != RET_OK) {
+		LOG_ERR("Failed to set static install code: %d", status);
+	} else {
+		LOG_INF("Static development install code set successfully.");
+	}
+}
+#endif
+
 void zboss_signal_handler(zb_bufid_t bufid)
 {
 	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
@@ -252,11 +274,16 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	/* Update network status LED. */
 	zigbee_led_status_update(bufid, ZIGBEE_NETWORK_STATE_LED);
 
-
-
 	switch (sig) {
+	case ZB_BDB_SIGNAL_DEVICE_FIRST_START:
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
-	/* fall-through */
+		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+		setup_static_install_code();
+		#endif
+		/* Call default signal handler. */
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		break;
+
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -313,6 +340,110 @@ static void rtc2_isr(const void *arg)
 		k_work_submit(&rtc_work);
 	}
 }
+static inline zb_uint8_t hex_char_to_val(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+	if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+	return 0;
+}
+
+static inline zb_uint8_t hex_pair_to_byte(const char *hex)
+{
+	return (hex_char_to_val(hex[0]) << 4) | hex_char_to_val(hex[1]);
+}
+
+static struct k_timer reboot_timer;
+
+static void reboot_timer_handler(struct k_timer *dummy)
+{
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
+static void factory_reset_handler(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	zb_bdb_reset_via_local_action(0);
+	k_timer_init(&reboot_timer, reboot_timer_handler, NULL);
+	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
+}
+
+static struct {
+	zb_ieee_addr_t addr;
+	zb_uint8_t ic[18];
+} g_ic_set_params;
+
+static void ic_set_callback(zb_bufid_t bufid)
+{
+	zb_set_long_address(g_ic_set_params.addr);
+	zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, g_ic_set_params.ic);
+	if (status == RET_OK) {
+		printk("ic_set_success\n");
+	} else {
+		printk("ic_set_failed: %d\n", status);
+	}
+}
+
+static void join_callback(zb_bufid_t bufid)
+{
+	zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	if (comm_status) {
+		printk("join_started\n");
+	} else {
+		printk("join_failed_busy\n");
+	}
+}
+
+static void parse_uart_command(char *line)
+{
+	if (strncmp(line, "ic_set ", 7) == 0) {
+		const char *ieee_hex = &line[7];
+		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
+
+		if (line[23] != ' ' || strlen(ieee_hex) < 53) {
+			printk("ic_set_failed: invalid format\n");
+			return;
+		}
+
+		for (int i = 0; i < 8; i++) {
+			g_ic_set_params.addr[7 - i] = hex_pair_to_byte(&ieee_hex[i * 2]);
+		}
+
+		for (int i = 0; i < 18; i++) {
+			g_ic_set_params.ic[i] = hex_pair_to_byte(&ic_hex[i * 2]);
+		}
+
+		ZB_SCHEDULE_APP_CALLBACK(ic_set_callback, 0);
+	} else if (strcmp(line, "join") == 0) {
+		ZB_SCHEDULE_APP_CALLBACK(join_callback, 0);
+	} else if (strcmp(line, "factory_reset") == 0) {
+		printk("factory_reset_started\n");
+		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
+	}
+}
+
+#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_PRIORITY 10
+
+static void uart_rx_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	console_getline_init();
+
+	while (1) {
+		char *line = console_getline();
+		if (line) {
+			parse_uart_command(line);
+		}
+	}
+}
+
+K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
+                uart_rx_thread, NULL, NULL, NULL,
+                UART_THREAD_PRIORITY, 0, 0);
 
 int main(void)
 {
@@ -358,8 +489,16 @@ int main(void)
 		set_tx_power();
 	#endif /* CONFIG_LIGHT_SWITCH_CONFIGURE_TX_POWER */
 
+
+
 	/* Start Zigbee default thread. */
 	zigbee_enable();
+
+	zb_ieee_addr_t self_ieee;
+	zb_get_long_address(self_ieee);
+	LOG_INF("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x",
+	        self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+	        self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
 
 	LOG_INF("ZBOSS BMP180 Temperature Sensor started");
 

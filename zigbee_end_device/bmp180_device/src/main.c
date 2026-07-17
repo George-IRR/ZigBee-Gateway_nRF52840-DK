@@ -279,16 +279,23 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
 		setup_static_install_code();
-		#endif
-		/* Call default signal handler. */
+		/* Let default handler trigger automatic network steering */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		#else
+		/* Production mode: do NOT auto-join. Wait for ic_set + join via UART. */
+		LOG_INF("Production mode: Install Code must be set before joining.");
+		LOG_INF("  Send: ic_set <YOUR_IEEE_ADDR_HEX> <INSTALL_CODE_36HEX>");
+		LOG_INF("  Then: join");
+		zb_buf_free(bufid);
+		return;
+		#endif
 		break;
 
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		if (status == RET_OK) {
-			LOG_INF("Static addressing to coordinator initialized.");
+			LOG_INF("Network joined successfully.");
 			dk_set_led_on(DK_LED4);
 		}
 		break;
@@ -304,6 +311,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		zb_buf_free(bufid);
 	}
 }
+
 
 static struct k_work rtc_work;
 

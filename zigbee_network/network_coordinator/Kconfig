@@ -5,13 +5,6 @@ menu "Zephyr Kernel"
 source "Kconfig.zephyr"
 endmenu
 
-config BMP180_DEVICE_TEST_MODE
-	bool "Enable E2E test mode with mocked temperature output"
-	default n
-	help
-	  When enabled, the BMP180 driver will return a sequence of mocked
-	  temperature values instead of reading from the physical sensor via I2C.
-
 config ZIGBEE_DEVELOPMENT_SECURITY
 	bool "Enable ZBOSS security with a hardcoded static Install Code for development"
 	default y

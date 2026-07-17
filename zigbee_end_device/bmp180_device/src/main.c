@@ -488,6 +488,16 @@ static void reboot_handler(zb_bufid_t bufid)
 	sys_reboot(SYS_REBOOT_COLD);
 }
 
+static void ieee_print_callback(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	zb_ieee_addr_t self_ieee;
+	zb_get_long_address(self_ieee);
+	printk("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x\n",
+	       self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+	       self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
+}
+
 static void parse_uart_command(char *line)
 {
 	if (strncmp(line, "ic_set ", 7) == 0) {
@@ -517,11 +527,7 @@ static void parse_uart_command(char *line)
 		printk("reboot_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(reboot_handler, 0);
 	} else if (strcmp(line, "ieee") == 0) {
-		zb_ieee_addr_t self_ieee;
-		zb_get_long_address(self_ieee);
-		printk("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x\n",
-		       self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
-		       self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
+		ZB_SCHEDULE_APP_CALLBACK(ieee_print_callback, 0);
 	}
 }
 
@@ -545,19 +551,13 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 	}
 }
 
-K_THREAD_STACK_DEFINE(uart_rx_stack, UART_THREAD_STACK_SIZE);
-static struct k_thread uart_rx_thread_data;
-static k_tid_t uart_rx_tid;
+K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
+                uart_rx_thread, NULL, NULL, NULL,
+                UART_THREAD_PRIORITY, 0, 0);
 
 int main(void)
 {
 	LOG_INF("Starting ZBOSS BMP180 Temperature Sensor");
-
-	/* Start UART RX thread after console and other drivers are ready. */
-	uart_rx_tid = k_thread_create(&uart_rx_thread_data, uart_rx_stack,
-				      K_THREAD_STACK_SIZEOF(uart_rx_stack),
-				      uart_rx_thread, NULL, NULL, NULL,
-				      UART_THREAD_PRIORITY, 0, K_NO_WAIT);
 
 
 	/* Initialize. */

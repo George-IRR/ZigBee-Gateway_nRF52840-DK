@@ -162,12 +162,17 @@ def test_e2e_security(dut: DeviceAdapter):
     ed_logs = []
     coord_logs = []
     
-    def collect_device_logs():
-        # Read all pending lines from End Device queue
-        for line in dut.readlines(print_output=False):
-            line_str = line.strip()
-            logger.info(f"[End Device] {line_str}")
-            ed_logs.append(line_str)
+    def collect_device_logs(drain_seconds=0.5):
+        # Drain End Device lines for up to drain_seconds using readline()
+        deadline = time.time() + drain_seconds
+        while time.time() < deadline:
+            line = dut.readline()
+            if line:
+                line_str = line.strip()
+                logger.info(f"[End Device] {line_str}")
+                ed_logs.append(line_str)
+            else:
+                time.sleep(0.05)
         # Read all pending lines from Coordinator serial buffer
         if coord_ser and coord_ser.is_open:
             while coord_ser.in_waiting > 0:

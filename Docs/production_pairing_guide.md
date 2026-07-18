@@ -77,6 +77,21 @@ west flash -d ~/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_end_device/bmp180
     --dev-id 1050247285 --runner nrfutil
 ```
 
+### Alternative: Using the Flash Script
+Instead of manual commands, you can use the `flash_devices.sh` utility:
+* **Volatile Production Mode** (Erases credentials on reboot):
+  ```bash
+  ./flash_devices.sh all --prod
+  ```
+* **Persistent Production Mode** (Saves credentials across reboots):
+  ```bash
+  ./flash_devices.sh all --prod --persist
+  ```
+* **Persistent Production Mode with Clean NVRAM** (Force Factory Reset settings erase at flash time):
+  ```bash
+  ./flash_devices.sh all --prod --persist --factory-reset
+  ```
+
 ---
 
 ## 2. Read Boot Logs

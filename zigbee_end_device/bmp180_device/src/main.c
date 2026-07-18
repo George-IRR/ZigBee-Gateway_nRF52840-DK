@@ -356,10 +356,13 @@ void zboss_signal_handler(zb_bufid_t bufid)
 		/* Let default handler trigger automatic network steering */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		#else
-		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT && status == RET_OK) {
+		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT) {
+			if (status == RET_OK)
+			{
+				g_network_joined = true;
+				dk_set_led_on(DK_LED4);
+			}
 			/* Secure rejoin / startup from persistent data */
-			g_network_joined = true;
-			dk_set_led_on(DK_LED4);
 			ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		} else {
 			/* Production mode first boot: do NOT auto-join. Print ready-to-paste commands. */

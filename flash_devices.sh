@@ -52,6 +52,7 @@ COORD_BUILD="$COORD_SRC/build"
 TARGET="$1"
 MODE_FLAG="--dev"
 PERSIST_FLAG=""
+ERASE_FLAG=""
 
 shift
 while [[ $# -gt 0 ]]; do
@@ -65,9 +66,12 @@ while [[ $# -gt 0 ]]; do
         --persist)
             PERSIST_FLAG="--persist"
             ;;
+        --factory-reset|--factory_reset)
+            ERASE_FLAG="--erase"
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist]"
+            echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist] [--factory-reset]"
             exit 1
             ;;
     esac
@@ -93,10 +97,16 @@ else
     PERSIST_LABEL="VOLATILE (resets NVRAM on boot)"
 fi
 
+ERASE_LABEL="NORMAL"
+if [ "$ERASE_FLAG" = "--erase" ]; then
+    ERASE_LABEL="MASS ERASE (factory reset flash before load)"
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  Mode: $MODE_LABEL"
 echo "║  Storage: $PERSIST_LABEL"
+echo "║  Flash action: $ERASE_LABEL"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
@@ -121,7 +131,7 @@ build_switch() {
 flash_switch() {
     echo "► Flashing End Device (ID: $SWITCH_DEV_ID)..."
     west flash -d "$SWITCH_BUILD" --domain bmp180_device \
-        --dev-id "$SWITCH_DEV_ID" --runner nrfutil
+        --dev-id "$SWITCH_DEV_ID" --runner nrfutil $ERASE_FLAG
     echo "✓ End Device flashed."
 }
 
@@ -138,7 +148,7 @@ build_coord() {
 flash_coord() {
     echo "► Flashing Coordinator (ID: $COORD_DEV_ID)..."
     west flash -d "$COORD_BUILD" --domain network_coordinator \
-        --dev-id "$COORD_DEV_ID" --runner nrfutil
+        --dev-id "$COORD_DEV_ID" --runner nrfutil $ERASE_FLAG
     echo "✓ Coordinator flashed."
 }
 
@@ -187,7 +197,7 @@ case "$TARGET" in
         prod_reminder
         ;;
     *)
-        echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist]"
+        echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist] [--factory-reset]"
         echo ""
         echo "  Targets:"
         echo "    switch      Flash the End Device (BMP180 sensor)"
@@ -200,11 +210,13 @@ case "$TARGET" in
         echo ""
         echo "  Options:"
         echo "    --persist   Enable NVRAM persistence (do not erase network config on boot)"
+        echo "    --factory-reset  Force flash erase (clean NVRAM settings before flashing)"
         echo ""
         echo "Examples:"
         echo "  ./flash_devices.sh all           # dev mode (default)"
         echo "  ./flash_devices.sh all --prod    # production mode (volatile)"
         echo "  ./flash_devices.sh all --prod --persist # production mode (persistent)"
+        echo "  ./flash_devices.sh all --prod --persist --factory-reset # clean settings, then persistent"
         exit 1
         ;;
 esac

@@ -50,37 +50,71 @@ COORD_BUILD="$COORD_SRC/build"
 
 # ── Parse arguments ────────────────────────────────────────────────────────────
 TARGET="$1"
-MODE_FLAG="${2:---dev}"   # default to --dev
+MODE_FLAG="--dev"
+PERSIST_FLAG=""
+
+shift
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prod|--production)
+            MODE_FLAG="--prod"
+            ;;
+        --dev|--development)
+            MODE_FLAG="--dev"
+            ;;
+        --persist)
+            PERSIST_FLAG="--persist"
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist]"
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 case "$MODE_FLAG" in
-    --prod|--production)
+    --prod)
         SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n"
         MODE_LABEL="PRODUCTION (manual UART pairing)"
         ;;
-    --dev|--development|"")
+    --dev)
         SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=y"
         MODE_LABEL="DEVELOPMENT (auto-join with static key)"
         ;;
-    *)
-        echo "Unknown mode: $MODE_FLAG. Use --dev or --prod."
-        exit 1
-        ;;
 esac
+
+if [ "$PERSIST_FLAG" = "--persist" ]; then
+    PERSIST_KCONFIG="-DCONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG=n"
+    PERSIST_LABEL="PERSISTENT"
+else
+    PERSIST_KCONFIG="-DCONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG=y"
+    PERSIST_LABEL="VOLATILE (resets NVRAM on boot)"
+fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  Mode: $MODE_LABEL"
+echo "║  Storage: $PERSIST_LABEL"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
+if [ "$MODE_FLAG" = "--prod" ] && [ "$PERSIST_FLAG" != "--persist" ]; then
+    echo "⚠️  WARNING: --persist flag was NOT provided."
+    echo "   The End Device NVRAM will be cleared on every reset/power cycle,"
+    echo "   requiring you to perform the manual pairing sequence again!"
+    echo ""
+fi
+
 # ── Build + Flash functions ────────────────────────────────────────────────────
 build_switch() {
-    echo "► Building End Device ($MODE_LABEL)..."
+    echo "► Building End Device ($MODE_LABEL, $PERSIST_LABEL)..."
     cd "$NCS_DIR"
     west build -b nrf52840dk/nrf52840 \
         -s "$SWITCH_SRC" \
         -d "$SWITCH_BUILD" \
-        -- "$SECURITY_KCONFIG"
+        -- "$SECURITY_KCONFIG" "$PERSIST_KCONFIG"
     echo "✓ End Device built."
 }
 
@@ -153,7 +187,7 @@ case "$TARGET" in
         prod_reminder
         ;;
     *)
-        echo "Usage: $0 {switch|coord|all} [--dev|--prod]"
+        echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist]"
         echo ""
         echo "  Targets:"
         echo "    switch      Flash the End Device (BMP180 sensor)"
@@ -164,10 +198,13 @@ case "$TARGET" in
         echo "    --dev       Development mode: auto-join with static key (default)"
         echo "    --prod      Production mode: manual UART pairing required"
         echo ""
+        echo "  Options:"
+        echo "    --persist   Enable NVRAM persistence (do not erase network config on boot)"
+        echo ""
         echo "Examples:"
         echo "  ./flash_devices.sh all           # dev mode (default)"
-        echo "  ./flash_devices.sh all --prod    # production mode"
-        echo "  ./flash_devices.sh coord --prod  # only coordinator, prod mode"
+        echo "  ./flash_devices.sh all --prod    # production mode (volatile)"
+        echo "  ./flash_devices.sh all --prod --persist # production mode (persistent)"
         exit 1
         ;;
 esac

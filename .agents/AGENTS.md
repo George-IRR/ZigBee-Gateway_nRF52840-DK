@@ -54,3 +54,32 @@
   - Phase 2: AES-128 encryption, WDT, Deep Sleep, Zigbee join security → update as implemented
   - Phase 3: Message Queue, payload parser → update as implemented
   - Phase 5: Modbus client polling → update as implemented
+
+## Git Commit & Code Comment Guidelines
+
+- All git commit messages and code comments must always be written in English.
+- Keep git commit messages brief, concise, and direct.
+- **CRITICAL:** Do NOT mention modifications to agent configuration files or rules directories (such as `.agent`, `.agents`, `.agents/AGENTS.md`) in git commit messages.
+
+## E2E Log-Based Testing Scenarios
+
+When developing or executing E2E tests, the agent must verify the following log patterns:
+
+### Scenario 1: Secure Connection of Whitelisted Device (Happy Path)
+- Verify detection of new device announcement log (e.g., `ZB_ZDO_SIGNAL_DEVICE_ANNCE`).
+- Verify log indicating the IEEE address passed whitelist check successfully.
+- Verify security key association success status (e.g., `ZB_STATUS_SUCCESS` or corresponding link key association logs).
+
+### Scenario 2: Rogue Node Rejection (Unauthorized Device)
+- Verify rejection log emitted by `zigbee_endpoint_logger` (e.g., `Association rejected: IEEE address not in whitelist`).
+- Verify error handler (`zigbee_error_handler`) is called with security-specific error code.
+- Verify absence of Transport Network Key log (confirm no "Key Sent" log exists for the rogue IEEE address).
+
+### Scenario 3: Secure Rejoin
+- Verify secure rejoin request log (e.g., `Secure rejoin request received` for the target IEEE address).
+- Verify successful rejoin completion directly, bypassing the initial key exchange step (no "New Install Code processed" logs).
+
+### Scenario 4: BMP180 Data Integrity
+- Verify that payload packet is successfully handed over to the secure APS layer (e.g., `ZCL report sent securely`).
+- Verify that Coordinator logs do not contain decryption errors (e.g., no `Cryptkey mismatch` or `MIC failure` logs).
+

@@ -16,6 +16,7 @@
 #include <string.h>
 #include <zephyr/sys/reboot.h>
 #include <ram_pwrdn.h>
+#include <zephyr/random/random.h>
 
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
@@ -39,7 +40,7 @@
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
  * for all network devices before running other samples.
  */
-#define ERASE_PERSISTENT_CONFIG    ZB_TRUE
+#define ERASE_PERSISTENT_CONFIG    (IS_ENABLED(CONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG) ? ZB_TRUE : ZB_FALSE)
 /* LED indicating that light switch successfully joind Zigbee network. */
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
 
@@ -54,6 +55,11 @@
 #endif
 
 LOG_MODULE_REGISTER(app, LOG_LEVEL_INF);
+
+/* True once the device has successfully joined the Zigbee network.
+ * Temperature reports are suppressed until this is set to prevent
+ * spurious ZCL write failures when not associated. */
+static bool g_network_joined = false;
 
 struct zb_device_ctx {
 	zb_zcl_basic_attrs_t basic_attr;
@@ -246,6 +252,69 @@ static void app_clusters_attr_init(void)
  * @param[in]   bufid   Reference to the Zigbee stack buffer
  *                      used to pass signal.
  */
+#if !defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+/* CRC-16/X-25 (reflected / Kermit variant) — same algorithm the ZBOSS
+ * stack uses to validate Install Codes. */
+static uint16_t ic_crc16_x25(const uint8_t *data, size_t len)
+{
+	uint16_t crc = 0xFFFF;
+	for (size_t i = 0; i < len; i++) {
+		crc ^= data[i];
+		for (int b = 0; b < 8; b++) {
+			crc = (crc & 1) ? (crc >> 1) ^ 0x8408 : (crc >> 1);
+		}
+	}
+	return crc ^ 0xFFFF;
+}
+
+/* Generate a random Install Code (16 bytes + 2-byte CRC-16/X-25 LE)
+ * and print the ready-to-paste UART commands for both devices. */
+static void print_production_pairing_commands(void)
+{
+	zb_ieee_addr_t self_ieee;
+	zb_get_long_address(self_ieee);
+
+	uint8_t key[16];
+	sys_rand_get(key, sizeof(key));
+
+	uint16_t crc = ic_crc16_x25(key, sizeof(key));
+	uint8_t ic[18];
+	memcpy(ic, key, 16);
+	ic[16] = (uint8_t)(crc & 0xFF);        /* CRC low byte */
+	ic[17] = (uint8_t)((crc >> 8) & 0xFF); /* CRC high byte */
+
+	/* Format IEEE address (big-endian display) */
+	char ieee_str[17];
+	snprintk(ieee_str, sizeof(ieee_str), "%02x%02x%02x%02x%02x%02x%02x%02x",
+	         self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+	         self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
+
+	/* Format IC as 36-char hex string */
+	char ic_str[37];
+	for (int i = 0; i < 18; i++) {
+		snprintk(&ic_str[i * 2], 3, "%02x", ic[i]);
+	}
+
+	printk("\n");
+	printk("╔══════════════════════════════════════════════════╗\n");
+	printk("║       PRODUCTION PAIRING — copy-paste commands  ║\n");
+	printk("╠══════════════════════════════════════════════════╣\n");
+	printk("║ Step 1 — Coordinator (/dev/ttyACM0):             ║\n");
+	printk("║   ic_add %s %s  ║\n", ieee_str, ic_str);
+	printk("║   expected reply: ic_add_success + steering_started\n");
+	printk("╠══════════════════════════════════════════════════╣\n");
+	printk("║ Step 2 — End Device (this terminal):             ║\n");
+	printk("║   ic_set %s %s  ║\n", ieee_str, ic_str);
+	printk("║   expected reply: ic_set_success                 ║\n");
+	printk("╠══════════════════════════════════════════════════╣\n");
+	printk("║ Step 3 — End Device (this terminal):             ║\n");
+	printk("║   join                                           ║\n");
+	printk("║   expected reply: join_started                   ║\n");
+	printk("╚══════════════════════════════════════════════════╝\n");
+	printk("\n");
+}
+#endif
+
 #if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
 static void setup_static_install_code(void)
 {
@@ -265,6 +334,7 @@ static void setup_static_install_code(void)
 }
 #endif
 
+
 void zboss_signal_handler(zb_bufid_t bufid)
 {
 	zb_zdo_app_signal_hdr_t *sig_hndler = NULL;
@@ -279,20 +349,45 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
 		setup_static_install_code();
-		#endif
-		/* Call default signal handler. */
+		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT && status == RET_OK) {
+			g_network_joined = true;
+			dk_set_led_on(DK_LED4);
+		}
+		/* Let default handler trigger automatic network steering */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		#else
+		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT) {
+			if (status == RET_OK)
+			{
+				g_network_joined = true;
+				dk_set_led_on(DK_LED4);
+			}
+			/* Secure rejoin / startup from persistent data */
+			ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		} else {
+			/* Production mode first boot: do NOT auto-join. Print ready-to-paste commands. */
+			print_production_pairing_commands();
+			zb_buf_free(bufid);
+			return;
+		}
+		#endif
 		break;
 
 	case ZB_BDB_SIGNAL_STEERING:
 		/* Call default signal handler. */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		if (status == RET_OK) {
-			LOG_INF("Static addressing to coordinator initialized.");
+			g_network_joined = true;
+			LOG_INF("Network joined successfully.");
 			dk_set_led_on(DK_LED4);
 		}
 		break;
 
+	case ZB_ZDO_SIGNAL_LEAVE:
+		g_network_joined = false;
+		dk_set_led_off(DK_LED4);
+		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		break;
 
 	default:
 		/* Call default signal handler. */
@@ -305,11 +400,16 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	}
 }
 
+
 static struct k_work rtc_work;
 
 static void zb_trigger_temp_report(zb_bufid_t param)
 {
 	ARG_UNUSED(param);
+	if (!g_network_joined) {
+		/* Not on network yet — skip silently */
+		return;
+	}
 	zb_ret_t err = zb_buf_get_out_delayed(send_temperature_cb);
 	if (err != RET_OK) {
 		LOG_ERR("Failed to allocate ZBOSS buffer for temp report (err %d)", err);
@@ -375,7 +475,9 @@ static struct {
 
 static void ic_set_callback(zb_bufid_t bufid)
 {
-	zb_set_long_address(g_ic_set_params.addr);
+	/* Note: do NOT call zb_set_long_address here.
+	 * The device uses its own factory-burned IEEE address from FICR.
+	 * We only set the Install Code for the TCLK derivation. */
 	zb_ret_t status = zb_secur_ic_set(ZB_IC_TYPE_128, g_ic_set_params.ic);
 	if (status == RET_OK) {
 		printk("ic_set_success\n");
@@ -394,8 +496,15 @@ static void join_callback(zb_bufid_t bufid)
 	}
 }
 
+static void reboot_handler(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	sys_reboot(SYS_REBOOT_COLD);
+}
+
 static void parse_uart_command(char *line)
 {
+	printk("Parsed UART Command: '%s'\n", line);
 	if (strncmp(line, "ic_set ", 7) == 0) {
 		const char *ieee_hex = &line[7];
 		const char *ic_hex = &line[24]; // 7 + 16 + 1 (space)
@@ -419,10 +528,19 @@ static void parse_uart_command(char *line)
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
+	} else if (strcmp(line, "reboot") == 0) {
+		printk("reboot_started\n");
+		ZB_SCHEDULE_APP_CALLBACK(reboot_handler, 0);
+	} else if (strcmp(line, "ieee") == 0) {
+		zb_ieee_addr_t self_ieee;
+		zb_get_long_address(self_ieee);
+		printk("Device IEEE Address: %02x%02x%02x%02x%02x%02x%02x%02x\n",
+		       self_ieee[7], self_ieee[6], self_ieee[5], self_ieee[4],
+		       self_ieee[3], self_ieee[2], self_ieee[1], self_ieee[0]);
 	}
 }
 
-#define UART_THREAD_STACK_SIZE 1024
+#define UART_THREAD_STACK_SIZE 2048
 #define UART_THREAD_PRIORITY 10
 
 static void uart_rx_thread(void *p1, void *p2, void *p3)
@@ -431,19 +549,22 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
+	printk("UART RX Thread: Initializing console...\n");
 	console_getline_init();
+	printk("UART RX Thread: Console initialized successfully.\n");
 
 	while (1) {
 		char *line = console_getline();
 		if (line) {
 			parse_uart_command(line);
 		}
+		k_msleep(20);
 	}
 }
 
 K_THREAD_DEFINE(uart_rx_tid, UART_THREAD_STACK_SIZE,
                 uart_rx_thread, NULL, NULL, NULL,
-                UART_THREAD_PRIORITY, 0, 0);
+                UART_THREAD_PRIORITY, 0, 2000);
 
 int main(void)
 {

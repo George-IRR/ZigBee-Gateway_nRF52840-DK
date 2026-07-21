@@ -18,3 +18,11 @@ config ZIGBEE_DEVELOPMENT_SECURITY
 	help
 	  When enabled, a pre-defined static EUI64 and Install Code will be registered
 	  automatically at boot, facilitating testing without manual CLI/UART registration.
+
+config ZIGBEE_RESET_PERSISTENT_CONFIG
+	bool "Erase persistent configuration on boot"
+	default y
+	help
+	  When enabled, persistent storage (network configuration) is erased on boot.
+	  Disable this to allow network credentials and keys to persist across reboots.
+

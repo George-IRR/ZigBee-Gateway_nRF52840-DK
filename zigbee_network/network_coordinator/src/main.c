@@ -573,6 +573,18 @@ static void factory_reset_handler(zb_bufid_t bufid)
 	k_timer_start(&reboot_timer, K_MSEC(1000), K_FOREVER);
 }
 
+static void reopen_steering_cb(zb_bufid_t bufid)
+{
+	ARG_UNUSED(bufid);
+	(void)(ZB_SCHEDULE_APP_ALARM_CANCEL(steering_finished, ZB_ALARM_ANY_PARAM));
+	zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	if (comm_status) {
+		printk("steering_started\n");
+	} else {
+		printk("steering_already_active\n");
+	}
+}
+
 static struct {
 	zb_ieee_addr_t addr;
 	zb_uint8_t ic[18];
@@ -580,12 +592,21 @@ static struct {
 
 static void ic_add_callback(zb_bufid_t bufid)
 {
+	/* Enforce IC policy now that we have at least one key registered */
+	zb_set_installcode_policy(ZB_TRUE);
 	zb_secur_ic_add(g_ic_add_params.addr, ZB_IC_TYPE_128, g_ic_add_params.ic, NULL);
 	printk("ic_add_success: ");
 	for (int i = 0; i < 8; i++) {
 		printk("%02x", g_ic_add_params.addr[7 - i]);
 	}
 	printk("\n");
+	/* Start steering so the End Device can now join */
+	zb_bool_t comm_status = bdb_start_top_level_commissioning(ZB_BDB_NETWORK_STEERING);
+	if (comm_status) {
+		printk("steering_started\n");
+	} else {
+		printk("steering_already_active\n");
+	}
 }
 
 static void parse_uart_command(char *line)
@@ -613,6 +634,8 @@ static void parse_uart_command(char *line)
 	} else if (strcmp(line, "factory_reset") == 0) {
 		printk("factory_reset_started\n");
 		ZB_SCHEDULE_APP_CALLBACK(factory_reset_handler, 0);
+	} else if (strcmp(line, "reopen") == 0) {
+		ZB_SCHEDULE_APP_CALLBACK(reopen_steering_cb, 0);
 	}
 }
 
@@ -632,6 +655,7 @@ static void uart_rx_thread(void *p1, void *p2, void *p3)
 		if (line) {
 			parse_uart_command(line);
 		}
+		k_msleep(20);
 	}
 }
 
@@ -663,8 +687,16 @@ int main(void)
 	/* Set modify attribute callback to capture Write Attribute commands */
 	ZB_ZCL_SET_MODIFY_ATTR_VALUE_CB(modify_attr_value_callback);
 
-	/* Enforce Install Code Policy */
+#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
+	/* Development: enforce IC policy immediately — static key already registered at boot */
 	zb_set_installcode_policy(ZB_TRUE);
+#else
+	/* Production: IC policy is activated lazily in ic_add_callback after a key is registered via UART */
+	LOG_INF("Production mode: waiting for Install Code registration via UART.");
+	LOG_INF("  Send on Coordinator: ic_add <IEEE_ADDR_HEX> <INSTALL_CODE_36HEX>");
+	LOG_INF("  Send on End Device:  ic_set <IEEE_ADDR_HEX> <INSTALL_CODE_36HEX>");
+	LOG_INF("  Then trigger join:   join  (on End Device)");
+#endif
 
 	/* Start Zigbee default thread */
 	zigbee_enable();

@@ -78,7 +78,7 @@ west flash -d ~/Git-Projects/ZigBee-Gateway_nRF52840-DK/zigbee_end_device/bmp180
 ```
 
 ### Alternative: Using the Flash Script
-Instead of manual commands, you can use the `flash_devices.sh` utility:
+Instead of manual commands, you can use the `flash_devices.sh` utility (see [Flash Devices Script Guide](flash_devices_guide.md) for full details):
 * **Volatile Production Mode** (Erases credentials on reboot):
   ```bash
   ./flash_devices.sh all --prod

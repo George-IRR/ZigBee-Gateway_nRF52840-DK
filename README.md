@@ -95,7 +95,7 @@ export ZEPHYR_SDK_INSTALL_DIR="$NCS_TOOLCHAIN_DIR/opt/zephyr-sdk"
 > ```
 
 #### Option A: Using the flash script
-Run the helper script which automatically loads `config.env` and flashes the target devices using `nrfutil`. 
+Run the helper script which automatically loads `config.env` and flashes the target devices using `nrfutil`. For complete details on script parameters and workflow, see the [Flash Devices Script Guide](Docs/flash_devices_guide.md).
 
 By default, the script builds in development mode (with auto-join). To build in production mode (`CONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n`), pass the `--prod` flag. You can also make the network parameters persistent across reboots/power cycles by passing `--persist`.
 

@@ -40,7 +40,7 @@
  * power-off. NOTE: If this option is set to ZB_TRUE then do full device erase
  * for all network devices before running other samples.
  */
-#define ERASE_PERSISTENT_CONFIG    ZB_TRUE
+#define ERASE_PERSISTENT_CONFIG    (IS_ENABLED(CONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG) ? ZB_TRUE : ZB_FALSE)
 /* LED indicating that light switch successfully joind Zigbee network. */
 #define ZIGBEE_NETWORK_STATE_LED   DK_LED3
 
@@ -349,13 +349,27 @@ void zboss_signal_handler(zb_bufid_t bufid)
 	case ZB_BDB_SIGNAL_DEVICE_REBOOT:
 		#if defined(CONFIG_ZIGBEE_DEVELOPMENT_SECURITY)
 		setup_static_install_code();
+		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT && status == RET_OK) {
+			g_network_joined = true;
+			dk_set_led_on(DK_LED4);
+		}
 		/* Let default handler trigger automatic network steering */
 		ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
 		#else
-		/* Production mode: do NOT auto-join. Print ready-to-paste commands. */
-		print_production_pairing_commands();
-		zb_buf_free(bufid);
-		return;
+		if (sig == ZB_BDB_SIGNAL_DEVICE_REBOOT) {
+			if (status == RET_OK)
+			{
+				g_network_joined = true;
+				dk_set_led_on(DK_LED4);
+			}
+			/* Secure rejoin / startup from persistent data */
+			ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
+		} else {
+			/* Production mode first boot: do NOT auto-join. Print ready-to-paste commands. */
+			print_production_pairing_commands();
+			zb_buf_free(bufid);
+			return;
+		}
 		#endif
 		break;
 

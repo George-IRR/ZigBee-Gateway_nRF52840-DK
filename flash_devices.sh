@@ -50,83 +50,127 @@ COORD_BUILD="$COORD_SRC/build"
 
 # ── Parse arguments ────────────────────────────────────────────────────────────
 TARGET="$1"
-MODE_FLAG="${2:---dev}"   # default to --dev
+MODE_FLAG="--dev"
+PERSIST_FLAG=""
+ERASE_FLAG=""
+
+shift
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prod|--production)
+            MODE_FLAG="--prod"
+            ;;
+        --dev|--development)
+            MODE_FLAG="--dev"
+            ;;
+        --persist)
+            PERSIST_FLAG="--persist"
+            ;;
+        --factory-reset|--factory_reset)
+            ERASE_FLAG="--erase"
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist] [--factory-reset]"
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 case "$MODE_FLAG" in
-    --prod|--production)
+    --prod)
         SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n"
         MODE_LABEL="PRODUCTION (manual UART pairing)"
         ;;
-    --dev|--development|"")
+    --dev)
         SECURITY_KCONFIG="-DCONFIG_ZIGBEE_DEVELOPMENT_SECURITY=y"
         MODE_LABEL="DEVELOPMENT (auto-join with static key)"
         ;;
-    *)
-        echo "Unknown mode: $MODE_FLAG. Use --dev or --prod."
-        exit 1
-        ;;
 esac
 
+if [ "$PERSIST_FLAG" = "--persist" ]; then
+    PERSIST_KCONFIG="-DCONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG=n"
+    PERSIST_LABEL="PERSISTENT"
+else
+    PERSIST_KCONFIG="-DCONFIG_ZIGBEE_RESET_PERSISTENT_CONFIG=y"
+    PERSIST_LABEL="VOLATILE (resets NVRAM on boot)"
+fi
+
+ERASE_LABEL="NORMAL"
+if [ "$ERASE_FLAG" = "--erase" ]; then
+    ERASE_LABEL="MASS ERASE (factory reset flash before load)"
+fi
+
 echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  Mode: $MODE_LABEL"
-echo "╚══════════════════════════════════════════════════════╝"
+echo "=========================================================="
+echo "  Mode: $MODE_LABEL"
+echo "  Storage: $PERSIST_LABEL"
+echo "  Flash action: $ERASE_LABEL"
+echo "=========================================================="
 echo ""
+
+if [ "$MODE_FLAG" = "--prod" ] && [ "$PERSIST_FLAG" != "--persist" ]; then
+    echo "WARNING: --persist flag was NOT provided."
+    echo "   The End Device NVRAM will be cleared on every reset/power cycle,"
+    echo "   requiring you to perform the manual pairing sequence again!"
+    echo ""
+fi
 
 # ── Build + Flash functions ────────────────────────────────────────────────────
 build_switch() {
-    echo "► Building End Device ($MODE_LABEL)..."
+    echo "[INFO] Building End Device ($MODE_LABEL, $PERSIST_LABEL)..."
     cd "$NCS_DIR"
     west build -b nrf52840dk/nrf52840 \
         -s "$SWITCH_SRC" \
         -d "$SWITCH_BUILD" \
-        -- "$SECURITY_KCONFIG"
-    echo "✓ End Device built."
+        -- "$SECURITY_KCONFIG" "$PERSIST_KCONFIG"
+    echo "[SUCCESS] End Device built."
 }
 
 flash_switch() {
-    echo "► Flashing End Device (ID: $SWITCH_DEV_ID)..."
+    echo "[INFO] Flashing End Device (ID: $SWITCH_DEV_ID)..."
     west flash -d "$SWITCH_BUILD" --domain bmp180_device \
-        --dev-id "$SWITCH_DEV_ID" --runner nrfutil
-    echo "✓ End Device flashed."
+        --dev-id "$SWITCH_DEV_ID" --runner nrfutil $ERASE_FLAG
+    echo "[SUCCESS] End Device flashed."
 }
 
 build_coord() {
-    echo "► Building Coordinator ($MODE_LABEL)..."
+    echo "[INFO] Building Coordinator ($MODE_LABEL)..."
     cd "$NCS_DIR"
     west build -b nrf52840dk/nrf52840 \
         -s "$COORD_SRC" \
         -d "$COORD_BUILD" \
         -- "$SECURITY_KCONFIG"
-    echo "✓ Coordinator built."
+    echo "[SUCCESS] Coordinator built."
 }
 
 flash_coord() {
-    echo "► Flashing Coordinator (ID: $COORD_DEV_ID)..."
+    echo "[INFO] Flashing Coordinator (ID: $COORD_DEV_ID)..."
     west flash -d "$COORD_BUILD" --domain network_coordinator \
-        --dev-id "$COORD_DEV_ID" --runner nrfutil
-    echo "✓ Coordinator flashed."
+        --dev-id "$COORD_DEV_ID" --runner nrfutil $ERASE_FLAG
+    echo "[SUCCESS] Coordinator flashed."
 }
 
 # ── Production mode reminder ───────────────────────────────────────────────────
 prod_reminder() {
     if [ "$MODE_FLAG" = "--prod" ] || [ "$MODE_FLAG" = "--production" ]; then
         echo ""
-        echo "╔══════════════════════════════════════════════════════╗"
-        echo "║  PRODUCTION MODE — Manual Pairing Required           ║"
-        echo "║                                                      ║"
-        echo "║  1. Read End Device IEEE address from its log        ║"
-        echo "║  2. Coordinator (/dev/ttyACM0):                      ║"
-        echo "║       ic_add <IEEE_HEX> <IC_36HEX>                   ║"
-        echo "║     → responds: ic_add_success + steering_started    ║"
-        echo "║  3. End Device (/dev/ttyACM2):                       ║"
-        echo "║       ic_set <IEEE_HEX> <IC_36HEX>                   ║"
-        echo "║     → responds: ic_set_success                       ║"
-        echo "║  4. End Device: join                                  ║"
-        echo "║     → responds: Joined network successfully           ║"
-        echo "║                                                      ║"
-        echo "║  Full guide: Docs/production_pairing_guide.md        ║"
-        echo "╚══════════════════════════════════════════════════════╝"
+        echo "=========================================================="
+        echo "  PRODUCTION MODE -- Manual Pairing Required              "
+        echo "                                                          "
+        echo "  1. Read End Device IEEE address from its log            "
+        echo "  2. Coordinator (/dev/ttyACM0):                          "
+        echo "       ic_add <IEEE_HEX> <IC_36HEX>                       "
+        echo "     -> responds: ic_add_success + steering_started       "
+        echo "  3. End Device (/dev/ttyACM2):                           "
+        echo "       ic_set <IEEE_HEX> <IC_36HEX>                       "
+        echo "     -> responds: ic_set_success                          "
+        echo "  4. End Device: join                                     "
+        echo "     -> responds: Joined network successfully             "
+        echo "                                                          "
+        echo "  Full guide: Docs/production_pairing_guide.md            "
+        echo "=========================================================="
         echo ""
     fi
 }
@@ -153,7 +197,7 @@ case "$TARGET" in
         prod_reminder
         ;;
     *)
-        echo "Usage: $0 {switch|coord|all} [--dev|--prod]"
+        echo "Usage: $0 {switch|coord|all} [--dev|--prod] [--persist] [--factory-reset]"
         echo ""
         echo "  Targets:"
         echo "    switch      Flash the End Device (BMP180 sensor)"
@@ -164,10 +208,15 @@ case "$TARGET" in
         echo "    --dev       Development mode: auto-join with static key (default)"
         echo "    --prod      Production mode: manual UART pairing required"
         echo ""
+        echo "  Options:"
+        echo "    --persist   Enable NVRAM persistence (do not erase network config on boot)"
+        echo "    --factory-reset  Force flash erase (clean NVRAM settings before flashing)"
+        echo ""
         echo "Examples:"
         echo "  ./flash_devices.sh all           # dev mode (default)"
-        echo "  ./flash_devices.sh all --prod    # production mode"
-        echo "  ./flash_devices.sh coord --prod  # only coordinator, prod mode"
+        echo "  ./flash_devices.sh all --prod    # production mode (volatile)"
+        echo "  ./flash_devices.sh all --prod --persist # production mode (persistent)"
+        echo "  ./flash_devices.sh all --prod --persist --factory-reset # clean settings, then persistent"
         exit 1
         ;;
 esac

@@ -95,16 +95,25 @@ export ZEPHYR_SDK_INSTALL_DIR="$NCS_TOOLCHAIN_DIR/opt/zephyr-sdk"
 > ```
 
 #### Option A: Using the flash script
-Run the helper script which automatically loads `config.env` and flashes the target devices using `nrfutil`:
+Run the helper script which automatically loads `config.env` and flashes the target devices using `nrfutil`. For complete details on script parameters and workflow, see the [Flash Devices Script Guide](Docs/flash_devices_guide.md).
+
+By default, the script builds in development mode (with auto-join). To build in production mode (`CONFIG_ZIGBEE_DEVELOPMENT_SECURITY=n`), pass the `--prod` flag. You can also make the network parameters persistent across reboots/power cycles by passing `--persist`.
+
 ```bash
-# Flash the End Device
+# Flash the End Device in development mode (volatile by default)
 ./flash_devices.sh switch
 
-# Flash the Network Coordinator
-./flash_devices.sh coord
+# Flash the End Device in production mode (requires manual pairing on every reboot)
+./flash_devices.sh switch --prod
 
-# Flash both in parallel
-./flash_devices.sh all
+# Flash the End Device in production mode and keep it persistent (only pairs once)
+./flash_devices.sh switch --prod --persist
+
+# Flash the End Device in persistent production mode, forcing a fresh settings erase (Factory Reset)
+./flash_devices.sh switch --prod --persist --factory-reset
+
+# Flash both in parallel in persistent production mode
+./flash_devices.sh all --prod --persist
 ```
 
 #### Option B: Flashing with nRF Connect (VSCode extension)

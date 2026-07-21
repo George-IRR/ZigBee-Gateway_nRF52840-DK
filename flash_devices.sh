@@ -103,15 +103,15 @@ if [ "$ERASE_FLAG" = "--erase" ]; then
 fi
 
 echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║  Mode: $MODE_LABEL"
-echo "║  Storage: $PERSIST_LABEL"
-echo "║  Flash action: $ERASE_LABEL"
-echo "╚══════════════════════════════════════════════════════╝"
+echo "=========================================================="
+echo "  Mode: $MODE_LABEL"
+echo "  Storage: $PERSIST_LABEL"
+echo "  Flash action: $ERASE_LABEL"
+echo "=========================================================="
 echo ""
 
 if [ "$MODE_FLAG" = "--prod" ] && [ "$PERSIST_FLAG" != "--persist" ]; then
-    echo "⚠️  WARNING: --persist flag was NOT provided."
+    echo "WARNING: --persist flag was NOT provided."
     echo "   The End Device NVRAM will be cleared on every reset/power cycle,"
     echo "   requiring you to perform the manual pairing sequence again!"
     echo ""
@@ -119,58 +119,58 @@ fi
 
 # ── Build + Flash functions ────────────────────────────────────────────────────
 build_switch() {
-    echo "► Building End Device ($MODE_LABEL, $PERSIST_LABEL)..."
+    echo "[INFO] Building End Device ($MODE_LABEL, $PERSIST_LABEL)..."
     cd "$NCS_DIR"
     west build -b nrf52840dk/nrf52840 \
         -s "$SWITCH_SRC" \
         -d "$SWITCH_BUILD" \
         -- "$SECURITY_KCONFIG" "$PERSIST_KCONFIG"
-    echo "✓ End Device built."
+    echo "[SUCCESS] End Device built."
 }
 
 flash_switch() {
-    echo "► Flashing End Device (ID: $SWITCH_DEV_ID)..."
+    echo "[INFO] Flashing End Device (ID: $SWITCH_DEV_ID)..."
     west flash -d "$SWITCH_BUILD" --domain bmp180_device \
         --dev-id "$SWITCH_DEV_ID" --runner nrfutil $ERASE_FLAG
-    echo "✓ End Device flashed."
+    echo "[SUCCESS] End Device flashed."
 }
 
 build_coord() {
-    echo "► Building Coordinator ($MODE_LABEL)..."
+    echo "[INFO] Building Coordinator ($MODE_LABEL)..."
     cd "$NCS_DIR"
     west build -b nrf52840dk/nrf52840 \
         -s "$COORD_SRC" \
         -d "$COORD_BUILD" \
         -- "$SECURITY_KCONFIG"
-    echo "✓ Coordinator built."
+    echo "[SUCCESS] Coordinator built."
 }
 
 flash_coord() {
-    echo "► Flashing Coordinator (ID: $COORD_DEV_ID)..."
+    echo "[INFO] Flashing Coordinator (ID: $COORD_DEV_ID)..."
     west flash -d "$COORD_BUILD" --domain network_coordinator \
         --dev-id "$COORD_DEV_ID" --runner nrfutil $ERASE_FLAG
-    echo "✓ Coordinator flashed."
+    echo "[SUCCESS] Coordinator flashed."
 }
 
 # ── Production mode reminder ───────────────────────────────────────────────────
 prod_reminder() {
     if [ "$MODE_FLAG" = "--prod" ] || [ "$MODE_FLAG" = "--production" ]; then
         echo ""
-        echo "╔══════════════════════════════════════════════════════╗"
-        echo "║  PRODUCTION MODE — Manual Pairing Required           ║"
-        echo "║                                                      ║"
-        echo "║  1. Read End Device IEEE address from its log        ║"
-        echo "║  2. Coordinator (/dev/ttyACM0):                      ║"
-        echo "║       ic_add <IEEE_HEX> <IC_36HEX>                   ║"
-        echo "║     → responds: ic_add_success + steering_started    ║"
-        echo "║  3. End Device (/dev/ttyACM2):                       ║"
-        echo "║       ic_set <IEEE_HEX> <IC_36HEX>                   ║"
-        echo "║     → responds: ic_set_success                       ║"
-        echo "║  4. End Device: join                                  ║"
-        echo "║     → responds: Joined network successfully           ║"
-        echo "║                                                      ║"
-        echo "║  Full guide: Docs/production_pairing_guide.md        ║"
-        echo "╚══════════════════════════════════════════════════════╝"
+        echo "=========================================================="
+        echo "  PRODUCTION MODE -- Manual Pairing Required              "
+        echo "                                                          "
+        echo "  1. Read End Device IEEE address from its log            "
+        echo "  2. Coordinator (/dev/ttyACM0):                          "
+        echo "       ic_add <IEEE_HEX> <IC_36HEX>                       "
+        echo "     -> responds: ic_add_success + steering_started       "
+        echo "  3. End Device (/dev/ttyACM2):                           "
+        echo "       ic_set <IEEE_HEX> <IC_36HEX>                       "
+        echo "     -> responds: ic_set_success                          "
+        echo "  4. End Device: join                                     "
+        echo "     -> responds: Joined network successfully             "
+        echo "                                                          "
+        echo "  Full guide: Docs/production_pairing_guide.md            "
+        echo "=========================================================="
         echo ""
     fi
 }

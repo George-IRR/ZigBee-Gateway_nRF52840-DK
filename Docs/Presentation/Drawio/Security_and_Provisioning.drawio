@@ -1,0 +1,187 @@
+<mxfile host="Electron" pages="2">
+  <diagram name="Dev" id="61I1I46WOamthvnum1OO">
+    <mxGraphModel dx="768" dy="583" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-2" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;elbow&quot;:&quot;vertical&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=65;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;strokeWidth=3;fontSize=14;" value="End Device&#xa;nRF52840" vertex="1">
+          <mxGeometry height="500" width="150" x="20" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-3" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;elbow&quot;:&quot;vertical&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=65;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;strokeWidth=3;fontSize=14;" value="Net. Coordinator&#xa;nRF52840" vertex="1">
+          <mxGeometry height="500" width="150" x="290" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-4" edge="1" parent="1" source="h2SF5eF1TAVNWjkyllDF-2" style="curved=1;endArrow=block;rounded=0;labelBackgroundColor=none;fontSize=14;" target="h2SF5eF1TAVNWjkyllDF-2" value="Boot →      setup_static_&#xa;          install_code()&#xa;&#xa;EUI64 + IC hardcoded">
+          <mxGeometry relative="1" x="-0.8385" y="-40" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="200" y="160" />
+              <mxPoint x="220" y="190" />
+              <mxPoint x="210" y="230" />
+              <mxPoint x="160" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-5" edge="1" parent="1" source="h2SF5eF1TAVNWjkyllDF-3" style="curved=1;endArrow=block;rounded=0;labelBackgroundColor=none;fontSize=14;" target="h2SF5eF1TAVNWjkyllDF-3" value="Boot → &#xa;register_static_&#xa;development_keys()&#xa;&#xa;Same EUI64 + IC">
+          <mxGeometry relative="1" x="-0.6154" y="-40" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="420" y="160" />
+              <mxPoint x="460" y="160" />
+              <mxPoint x="500" y="180" />
+              <mxPoint x="490" y="250" />
+            </Array>
+            <mxPoint x="364.6666666666665" y="220" as="sourcePoint" />
+            <mxPoint x="364.6666666666665" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-6" edge="1" parent="1" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=14;" value="1. MAC Association Request">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="239" y="280" />
+            </Array>
+            <mxPoint x="94.81034482758616" y="279.9999999999999" as="sourcePoint" />
+            <mxPoint x="364.5" y="279.9999999999999" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-7" edge="1" parent="1" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=horizontal;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=14;" value="2. TCLK Exchange&#xa;Derived from install code">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="242" y="350" />
+            </Array>
+            <mxPoint x="364.5" y="350" as="sourcePoint" />
+            <mxPoint x="94.81034482758616" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-8" edge="1" parent="1" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=14;" value="3. Transport Network Key&#xa;Encrypted with unique TCLK">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="242" y="420" />
+            </Array>
+            <mxPoint x="364.5" y="420" as="sourcePoint" />
+            <mxPoint x="94.81034482758616" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-9" parent="1" style="fillColor=#ffff88;strokeColor=#9E916F;fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=14;" value="CONFIG_ZIGBEE_DEVELOPMENT_SECURITY = y" vertex="1">
+          <mxGeometry height="49" width="340" x="60" y="95" as="geometry" />
+        </mxCell>
+        <mxCell id="h2SF5eF1TAVNWjkyllDF-10" parent="1" style="fillColor=#ffff88;strokeColor=#9E916F;fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=14;" value="Complete Auto-join " vertex="1">
+          <mxGeometry height="50" width="320" x="70" y="440" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="Pcw-e0FmJj-r5ZV2Xwwm" name="Prod">
+    <mxGraphModel dx="1311" dy="994" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-2" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;elbow&quot;:&quot;vertical&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=65;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;strokeWidth=3;" value="PC Terminal" vertex="1">
+          <mxGeometry height="978" width="150" x="20" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-3" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;elbow&quot;:&quot;vertical&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=65;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;strokeWidth=3;" value="Net. Coordinator" vertex="1">
+          <mxGeometry height="978" width="150" x="333" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-4" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;elbowEdgeStyle&quot;,&quot;elbow&quot;:&quot;vertical&quot;,&quot;curved&quot;:0,&quot;rounded&quot;:0};size=65;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;strokeWidth=3;" value="End Device" vertex="1">
+          <mxGeometry height="978" width="150" x="648" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-5" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-4" style="curved=1;endArrow=block;rounded=0;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-4" value="Boot &#xa;→ print IEEE&#xa; address">
+          <mxGeometry relative="1" x="-0.6658" y="-30" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="810" y="230" />
+              <mxPoint x="780" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-6" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-4" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeWidth=3;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-2" value="&quot;Device IEEE: f4...ec&quot;">
+          <mxGeometry relative="1" x="-0.3564" y="-4" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="421" y="324" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-7" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-2" style="curved=1;endArrow=block;rounded=0;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-2" value="Generate  random install code&#xa;16 bytes  + CRC-16/X-25 LE">
+          <mxGeometry relative="1" x="-0.0872" y="-10" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="160" y="340" />
+              <mxPoint x="160" y="440" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-8" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-2" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-3" value="ic_add f4ce36... 9d2247...&#xa;(UART command)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="494" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-9" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-3" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;dashed=1;dashPattern=2 3;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-2" value="ic_add_success + steering_started">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="263" y="544" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-10" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-2" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-4" value="ic_set f4ce36... 9d2247...&#xa;(UART command)">
+          <mxGeometry relative="1" x="0.4522" y="3" as="geometry">
+            <mxPoint x="1" as="offset" />
+            <Array as="points">
+              <mxPoint x="418" y="663" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-11" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-4" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeWidth=3;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-2" value="ic_set_success">
+          <mxGeometry relative="1" x="-0.2606" y="-3" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="421" y="713" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-12" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-2" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-4" value="join">
+          <mxGeometry relative="1" x="0.1328" as="geometry">
+            <mxPoint x="1" as="offset" />
+            <Array as="points">
+              <mxPoint x="418" y="763" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-13" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-4" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-3" value="MAC Association +&#xa; TCLK Exchange">
+          <mxGeometry relative="1" x="0.0314" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="577" y="813" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-14" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-3" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-4" value="Transport Network Key&#xa;Encrypted">
+          <mxGeometry relative="1" x="-0.0314" y="-27" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="574" y="863" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-15" edge="1" parent="1" source="fG8N-Mb0XlUCB4tzdynV-4" style="verticalAlign=bottom;edgeStyle=elbowEdgeStyle;elbow=vertical;curved=0;rounded=0;endArrow=block;labelBackgroundColor=none;fontSize=22;strokeWidth=3;strokeColor=light-dark(#000000,#CCCCCC);" target="fG8N-Mb0XlUCB4tzdynV-2" value="&quot;Joined network successfully&quot;">
+          <mxGeometry relative="1" x="0.474" y="-3" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="421" y="913" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-16" parent="1" style="fillColor=#ffff88;strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;" value="CONFIG_ZIGBEE_DEVELOPMENT_SECURITY = n" vertex="1">
+          <mxGeometry height="49" width="678" x="70" y="165" as="geometry" />
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-17" parent="1" style="fillColor=#ffff88;strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;" value="Permit Join = 180s" vertex="1">
+          <mxGeometry height="49" width="270" x="274" y="560" as="geometry" />
+        </mxCell>
+        <mxCell id="fG8N-Mb0XlUCB4tzdynV-18" parent="1" style="fillColor=#ffff88;strokeColor=light-dark(#000000,#CCCCCC);fontColor=light-dark(#333333,#cccccc);labelBackgroundColor=none;fontSize=22;" value="Secured manual pairing&#xa;Unique key for each device" vertex="1">
+          <mxGeometry height="57" width="670" x="70" y="933" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

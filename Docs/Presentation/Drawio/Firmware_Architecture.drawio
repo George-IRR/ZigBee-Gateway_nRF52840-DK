@@ -1,0 +1,91 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="f0K411ZsCZ-3S-Fs_XiR">
+    <mxGraphModel dx="1591" dy="1207" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="5B3c_FOffMCsovqkWuOo-50" parent="1" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;fillColor=#3b82f6;strokeColor=#2563eb;fontColor=#fff;fontSize=22;fontStyle=1" value="Protocol Layer" vertex="1">
+          <mxGeometry height="260" width="770" x="20" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-51" parent="5B3c_FOffMCsovqkWuOo-50" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=22;fontStyle=1" value="ZBOSS Zigbee 3.0 &#xa;BDB, NWK, APS, ZCL" vertex="1">
+          <mxGeometry height="199.47" width="420" x="180" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-53" parent="1" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;fillColor=#22c55e;strokeColor=#16a34a;fontColor=#000;fontSize=22;fontStyle=1" value="Application Layer" vertex="1">
+          <mxGeometry height="154" width="770" x="20" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-54" parent="5B3c_FOffMCsovqkWuOo-53" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="BMP180 Driver&#xa;I2C init, temp math" vertex="1">
+          <mxGeometry height="75.85074626865672" width="220" x="30" y="49.55582089552239" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-55" parent="5B3c_FOffMCsovqkWuOo-53" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="ZCL Temperature Cluster&#xa;attribute reporting" vertex="1">
+          <mxGeometry height="75.85074626865672" width="220" x="280" y="49.55582089552239" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-56" parent="5B3c_FOffMCsovqkWuOo-53" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="UART CLI&#xa;ic_set, join, factory_reset" vertex="1">
+          <mxGeometry height="75.85074626865672" width="220" x="530" y="49.55582089552239" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-57" edge="1" parent="1" source="5B3c_FOffMCsovqkWuOo-53" style="curved=1;startArrow=none;endArrow=block;exitX=0.5;exitY=1;entryX=0.5;entryY=0;rounded=0;fontSize=18;fontStyle=1" target="5B3c_FOffMCsovqkWuOo-50" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-58" edge="1" parent="1" source="5B3c_FOffMCsovqkWuOo-50" style="curved=1;startArrow=none;endArrow=block;exitX=0.5;exitY=1;entryX=0.5;entryY=0;rounded=0;fontSize=18;fontStyle=1" target="5B3c_FOffMCsovqkWuOo-45" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-59" edge="1" parent="1" source="5B3c_FOffMCsovqkWuOo-45" style="curved=1;startArrow=none;endArrow=block;exitX=0.5;exitY=1;entryX=0.5;entryY=0;rounded=0;fontSize=18;fontStyle=1" target="5B3c_FOffMCsovqkWuOo-40" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-69" connectable="0" parent="1" style="group;fontSize=18;fontStyle=1" value="" vertex="1">
+          <mxGeometry height="340" width="770" x="20" y="1280" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-40" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;fillColor=#f59e0b;strokeColor=#d97706;fontColor=light-dark(#000000,#FFFFFF);fontSize=22;container=0;fontStyle=1" value="nRF52840" vertex="1">
+          <mxGeometry height="340" width="770" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-41" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="GPIO" vertex="1">
+          <mxGeometry height="54" width="284.38" x="15.619999999999997" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-60" parent="5B3c_FOffMCsovqkWuOo-69" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=22;fontStyle=1" value="&lt;font&gt;HAL&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="127.81" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-61" parent="5B3c_FOffMCsovqkWuOo-69" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=22;fontStyle=1" value="&lt;font&gt;Implemented&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="165.1" x="540" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-64" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="UART" vertex="1">
+          <mxGeometry height="54" width="284.38" x="15.620000000000005" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-65" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="CryptoCell-310&#xa;AES-128 HW Accel" vertex="1">
+          <mxGeometry height="54" width="284.38" x="15.620000000000005" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-67" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="Real Time Clock" vertex="1">
+          <mxGeometry height="54" width="284.38" x="470" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-66" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="I2C" vertex="1">
+          <mxGeometry height="54" width="284.38" x="470" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-68" parent="5B3c_FOffMCsovqkWuOo-69" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=18;fontStyle=1" value="BMP180 Driver" vertex="1">
+          <mxGeometry height="54" width="284.38" x="470" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-70" connectable="0" parent="1" style="group;fontSize=22;fontStyle=1" value="" vertex="1">
+          <mxGeometry height="350" width="770" x="20" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-45" parent="5B3c_FOffMCsovqkWuOo-70" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;fillColor=#3b82f6;strokeColor=#2563eb;fontColor=#fff;fontSize=18;container=0;fontStyle=1" value="Zephyr RTOS v3.7.x" vertex="1">
+          <mxGeometry height="350" width="770" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-46" parent="5B3c_FOffMCsovqkWuOo-70" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=22;fontStyle=1" value="Kernel / Threads" vertex="1">
+          <mxGeometry height="100" width="250" x="60" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-47" parent="5B3c_FOffMCsovqkWuOo-70" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=22;fontStyle=1" value="Work Queues / Timers" vertex="1">
+          <mxGeometry height="100" width="250" x="470.0018518518518" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-48" parent="5B3c_FOffMCsovqkWuOo-70" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=22;fontStyle=1" value="NVS Persistent Storage" vertex="1">
+          <mxGeometry height="100" width="250" x="59.999259259259276" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="5B3c_FOffMCsovqkWuOo-49" parent="5B3c_FOffMCsovqkWuOo-70" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=22;fontStyle=1" value="Shell Subsystem" vertex="1">
+          <mxGeometry height="100" width="250" x="469.9988888888889" y="220" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

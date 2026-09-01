@@ -1,0 +1,63 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="VggjdVwxt6If422SVHjd">
+    <mxGraphModel dx="1114" dy="845" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="kMBG3VH14uGJPWWucDjX-1" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=#3b82f6;strokeColor=#2563eb;fontColor=#fff;fontSize=15;fontStyle=1" value=" " vertex="1">
+          <mxGeometry height="148" width="218" x="1006" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-2" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=#22c55e;strokeColor=#16a34a;fontColor=#000;verticalAlign=top;fontSize=15;fontStyle=1" value="PC Gateway Software" vertex="1">
+          <mxGeometry height="148" width="310" x="517" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-3" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=#f59e0b;strokeColor=#d97706;fontColor=#000;verticalAlign=top;fontSize=15;fontStyle=1" value="Coordinator nRF52840-DK #2" vertex="1">
+          <mxGeometry height="148" width="283" x="966" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-4" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=#f59e0b;strokeColor=#d97706;fontColor=#000;verticalAlign=top;fontSize=15;fontStyle=1" value="End Device nRF52840-DK #1" vertex="1">
+          <mxGeometry height="148" width="277" x="517" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-5" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=#f59e0b;strokeColor=#d97706;fontColor=#000;verticalAlign=top;fontSize=15;fontStyle=1" value="Sensor" vertex="1">
+          <mxGeometry height="148" width="283" x="170" y="177" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-6" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=15;fontStyle=1" value="BMP180&#xa;Temperature&#xa;" vertex="1">
+          <mxGeometry height="78" width="233" x="195" y="212" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-7" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=15;fontStyle=1" value="Firmware Zephyr&#xa;Zigbee End Device Role" vertex="1">
+          <mxGeometry height="78" width="227" x="542" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-8" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=15;fontStyle=1" value="Firmware Zephyr&#xa;Zigbee Coordinator Role" vertex="1">
+          <mxGeometry height="78" width="233" x="991" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-9" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=15;fontStyle=1" value="Gateway Program" vertex="1">
+          <mxGeometry height="78" width="260" x="542" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-10" parent="1" style="whiteSpace=wrap;strokeWidth=2;fillColor=light-dark(#eeeeee,#1f2020);strokeColor=light-dark(#999999,#cccccc);fontColor=light-dark(#333333,#cccccc);fontSize=15;fontStyle=1" value="Home Assistant" vertex="1">
+          <mxGeometry height="78" width="168" x="1031" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-11" edge="1" parent="1" source="kMBG3VH14uGJPWWucDjX-6" style="curved=1;startArrow=none;endArrow=block;exitX=1;exitY=0.5;entryX=0;entryY=0.5;rounded=0;labelBackgroundColor=none;fontSize=15;fontStyle=1" target="kMBG3VH14uGJPWWucDjX-7" value="I2C&#xa;(P0.26 SDA, P0.27 SCL)">
+          <mxGeometry relative="1" x="-0.0015" y="56" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-12" edge="1" parent="1" source="kMBG3VH14uGJPWWucDjX-7" style="curved=1;startArrow=none;endArrow=block;exitX=1;exitY=0.5;entryX=0;entryY=0.5;rounded=0;labelBackgroundColor=none;fontSize=15;fontStyle=1" target="kMBG3VH14uGJPWWucDjX-8" value="Zigbee 3.0&#xa;2.4 GHz, AES-128">
+          <mxGeometry relative="1" x="-0.0901" y="-16" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-13" edge="1" parent="1" source="kMBG3VH14uGJPWWucDjX-8" style="startArrow=none;endArrow=block;exitX=1;exitY=0.5;entryX=0;entryY=0.5;rounded=0;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=none;fontSize=15;fontStyle=1" target="kMBG3VH14uGJPWWucDjX-9" value="">
+          <mxGeometry relative="1" x="0.006" y="-9" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kMBG3VH14uGJPWWucDjX-14" edge="1" parent="1" source="kMBG3VH14uGJPWWucDjX-9" style="curved=1;startArrow=none;endArrow=block;exitX=1;exitY=0.5;entryX=0;entryY=0.5;rounded=0;labelBackgroundColor=none;fontSize=15;fontStyle=1" target="kMBG3VH14uGJPWWucDjX-10" value="">
+          <mxGeometry relative="1" x="0.0306" y="-6" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
